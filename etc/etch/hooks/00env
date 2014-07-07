@@ -1,0 +1,20 @@
+# determine prod/tst/finalstage duty
+# configure additional SOURCES
+# if host belongs to tst or finalstage cluster then its not prod
+# if host belongs to fst-www03 depot, then its not prod
+
+my $type='prod';
+my $source='prod';
+if    ( grep { /^ctl_cluster_prf/	} @DUTIES)   	{ $type='prf'; }
+elsif ( grep { /^ctl_cluster_final/ 	} @DUTIES) 	{ $type='fs'; }
+elsif ( grep { /^ctl_subset_bp.*/	} @DUTIES)	{ $type='bp'; }
+elsif ( grep { /^ctl_depothost_ndn/	} @DUTIES)	{ $type='ndn'; }
+elsif (!grep { /^ctl_depothost_(www)?area/ } @DUTIES) 	{ $type='nonprod' }
+
+push(@DUTIES, 'ctl_env_'. $type);
+
+# add SOURCES
+$source = 'nonprod' if ($type ne 'prod');
+push(@SOURCES, "$CONFIGBASE/source_$source") if ( -e "$CONFIGBASE/source_$source");
+
+return 1;

@@ -1,0 +1,28 @@
+<config>
+	<PATH>/bin:/usr/bin:/usr/local/bin</PATH>
+        <LOG>/sites/utils/local/var/log/etch</LOG>
+	<LOGDAYS>60</LOGDAYS>
+        <VARBASE>/sites/utils/local/var/etch</VARBASE>
+
+	<file>
+		<perms>444</perms>
+		<warning_file>warning.txt</warning_file>
+		<comment_open></comment_open>
+		<comment_line># </comment_line>
+		<comment_close></comment_close>
+	</file>
+	<link>
+	</link>
+	<directory>
+		<perms>755</perms>
+	</directory>
+	<rsync>
+		<command>rsync</command>
+		<options>-aiO --delete --exclude=.git --exclude=.svn --exclude='*.swp'</options>
+	</rsync>
+	<forbiddenhosts>
+		<host>area.*</host>
+		<host>ndnareab01</host>
+	</forbiddenhosts>
+</config>
+

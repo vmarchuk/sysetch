@@ -1,0 +1,7 @@
+# template script to execute shell script
+#
+# because etch splits args by ',', we need to put it back otherwise it breaks args with commas
+$exec = join(',', @ARGS);
+my $out = `$exec`;
+chomp($out);
+print CONFIG $out;

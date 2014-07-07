@@ -1,0 +1,6 @@
+# set shell environment variables here
+
+PATH=/sites/utils/perl/bin:$PATH 
+LD_LIBRARY_PATH=/sites/utils/lib/64:$LD_LIBRARY_PATH 
+PERL=/usr/bin/perl
+

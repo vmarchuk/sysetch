@@ -1,0 +1,20 @@
+# print out entry by parsing @DUTIES
+# glue == how to join multiple matches together
+#         if empty, then only display first
+#         if set to 1 then uses comma
+($attr, $glue) = @ARGS;
+$glue = ',' if ($glue == 1);
+#####
+
+$wildcard = '(.*?)';
+$attr =~ s/\@/$wildcard/g;
+my $regex = qr/^$attr$/;
+@match = grep { /$regex/ } @DUTIES;
+@out = ();
+foreach my $m (@match)
+{
+	$m =~ /$regex/;
+	push(@out, $1);
+}
+if ($glue) { print CONFIG join($glue, @out); }
+else { print CONFIG $out[0]; }

@@ -1,0 +1,38 @@
+<!-- Configuration setting for etchpush -->
+<config>
+        <LOG>/sites/utils/local/var/log/etchpush</LOG>
+        <LOGDAYS>60</LOGDAYS>
+
+	<!-- Local command to run to sync local etch configuration  -->
+	<!--
+	<localsetup></localsetup>
+	-->
+	
+	<!-- Simple remote command that runs in generateall to ensure basic environment exists -->
+	<!-- <remotetest>test -d /sites/utils || (mkdir -p /sites/utils; chown atg:atg /sites /sites/utils);</remotetest> -->
+	<remotetest>/sites/utils/local/bin/etch -i</remotetest>
+
+	<!-- Command to sync etch configuration to remote host: bootstrap -->
+	<remotesetup><![CDATA[
+		DEPOT="`/sites/utils/local/libexec/getctlattributeLDAP 'ldapnocache' ::HOST:: '' depothost '' 'ou=ctl,dc=cingular,dc=com ou=ctl_dev,dc=cingular,dc=com' | tail -1`";
+		DATACENTER="`/sites/utils/local/libexec/getctlattributeLDAP 'ldapnocache' ::HOST:: '' datacenter '' 'ou=ctl,dc=cingular,dc=com ou=ctl_dev,dc=cingular,dc=com' | tail -1`";
+		echo "Building utils. DEPOT:$DEPOT, DATACENTER:$DATACENTER"
+		[ -z "$DEPOT" ] && echo "ERROR: Unable to lookup host in CTL!" && exit 5
+		ssh -q -o StrictHostKeyChecking=no ::HOST:: "rsync --exclude=.git --exclude='var/log/*' -aiO --progress --stats --rsync-path='env rsync' $DEPOT::DEPOT$(uname -p | grep x86 >/dev/null && echo X86)/utils/ /sites/utils/"
+		echo "Building utils/local"
+		ssh -q -o StrictHostKeyChecking=no ::HOST:: "rsync --exclude=.git --exclude='var/log/*' -aiO --progress --stats --rsync-path='env rsync' $DEPOT::DEPOT/utils/local/ /sites/utils/local/"
+		echo "Defining Ldap Config"
+                ssh -q -o StrictHostKeyChecking=no ::HOST:: "echo $DATACENTER>/sites/utils/tmp/.ctlldap.cfg"
+	]]></remotesetup>
+
+	<!-- remote connect method -->
+	<connect>ssh -q -o StrictHostKeyChecking=no ::HOST:: '::COMMAND::'</connect>
+
+	<!-- Remote command to invoke etch -->
+	<etch>/sites/utils/local/bin/etch</etch>
+	
+	<!-- Specific settings for select files -->
+	<file name="/etc/foo">
+		<connect>ssh -q -latg -o StrictHostKeyChecking=no -c arcfour ::HOST:: '::COMMAND::'</connect>
+	</file>
+</config>
