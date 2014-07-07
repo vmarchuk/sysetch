@@ -1,6 +1,7 @@
 #!/bin/env perl
-# Name: Etch
-# Author: Walter Marchuk
+$NAME='Etch';
+$AUTHOR='Vladimir (Walter) Marchuk';
+$VERSION='1.0';
 
 # Make sure all perl modules exist before using
 
@@ -2883,7 +2884,7 @@ sub usage
 	{
 		$help =		"Usage: etch [options] </path/to/etch | -g>\n".$help;
 	}
-	$help =		"SysEtch, configuration management done simple.\n". $DIV . $help;
+	$help =		"SysEtch, configuration management done simple. Version: $VERSION\nhttp://www.sysetch.com\n". $DIV . $help;
 	&display($help);
 	exit;
 }
