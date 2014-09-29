@@ -1,7 +1,0 @@
-# Extra exotic functions
-
-# example:
-#push(@SAFESHARE, '&newfunction');
-
-
-1;

@@ -14,7 +14,7 @@ elsif (!grep { /^ctl_depothost_(www)?area/ } @DUTIES) 	{ $type='nonprod' }
 push(@DUTIES, 'ctl_env_'. $type);
 
 # add SOURCES
-$source = 'nonprod' if ($type ne 'prod');
-push(@SOURCES, "$CONFIGBASE/source_$source") if ( -e "$CONFIGBASE/source_$source");
+#$source = 'nonprod' if ($type ne 'prod');
+#push(@SOURCES, "$CONFIGBASE/source_$source") if ( -e "$CONFIGBASE/source_$source");
 
 return 1;

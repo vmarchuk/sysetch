@@ -1,0 +1,9 @@
+<config>
+        <directory>
+        	<!-- <owner>username</owner> -->
+        	<!-- <group>groupname</group> -->
+                <perms>775</perms>
+                <create duty="weblogic"/>
+        </directory>
+</config>
+

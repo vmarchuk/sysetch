@@ -1,0 +1,11 @@
+<config>
+        <depend>
+		<!-- dependency path can be abolsute or relative -->
+		<dest>resolv.conf</dest>
+	</depend>
+        <file>
+                <source>
+                        <script duty="weblogic">file.script</script>
+                </source>
+        </file>
+</config>

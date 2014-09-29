@@ -1,0 +1,8 @@
+<!-- generate file that contains passwords -->
+<config>
+        <file>
+                <source>
+                	<plain template="true">file</plain>
+                </source>
+        </file>
+</config>

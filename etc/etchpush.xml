@@ -1,0 +1,39 @@
+<!-- Configuration setting for etchpush -->
+<config>
+        <LOG>/data/utils/logs/etchpush</LOG>
+        <LOGDAYS>60</LOGDAYS>
+
+	<!-- Local command to run to sync local etch configuration  -->
+	<!--
+	<localsetup></localsetup>
+	-->
+	
+	<!-- Simple remote command that runs in generateall to ensure basic environment exists -->
+	<!-- <remotetest>test -d /sites/utils || (mkdir -p /sites/utils; chown atg:atg /sites /sites/utils);</remotetest> -->
+	<!-- <remotetest>/sites/utils/local/bin/etch -test </remotetest>  -->
+	<remotetest></remotetest>
+
+	<!-- Command to sync etch configuration to remote host: bootstrap
+		::HOST:: is replaced via real hostname
+	-->
+	<remotesetup><![CDATA[
+	     #Examples:
+	     #	Install etch files via push:
+	     #		rsync -aiO --progress --stats /data/utils/ ::HOST:::/data/utils/
+	     #	Install etch files via pull:
+	     #		# depothost can be predetermined by running a script before ssh to figure out $depothost
+	     #		ssh -q -o StrictHostKeyChecking=no ::HOST:: "rsync -aiO --progress --stats depothost::utils/ /data/utils/"
+	     rsync --rsync-path="sudo mkdir -p /data/utils sudo chown vagrant:vagrant /data/utils && env rsync" -aiO --progress --stats --exclude=.git --exclude=/logs/ /data/utils/ ::HOST:::/data/utils/
+	]]></remotesetup>
+
+	<!-- remote connect method -->
+	<connect>ssh -q -o StrictHostKeyChecking=no ::HOST:: '::COMMAND::'</connect>
+
+	<!-- Remote location of etch, if not specified then use location of parent -->
+	<etch></etch>
+	
+	<!-- Specific settings for select files -->
+	<file name="/etc/foo">
+		<connect>ssh -q -latg -o StrictHostKeyChecking=no -c arcfour ::HOST:: '::COMMAND::'</connect>
+	</file>
+</config>

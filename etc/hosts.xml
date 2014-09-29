@@ -1,0 +1,21 @@
+<hosts>
+	<host name="sun.localdomain">
+		<hardware>6u</hardware>
+		<hardware>bigdisk</hardware>
+		<cluster>seattleapp</cluster>
+		<cluster>apps</cluster>
+		<location>seattle</location>
+		<location>rowC_rack5</location>
+		<duty>weblogic</duty>
+	</host>
+	<host name="test0">
+                <hardware>6u</hardware>
+                <hardware>bigdisk</hardware>
+                <cluster>seattleapp</cluster>
+                <cluster>apps</cluster>
+                <location>seattle</location>
+                <location>rowC_rack5</location>
+                <duty>weblogic</duty>
+        </host>
+
+</hosts>

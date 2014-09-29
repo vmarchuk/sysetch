@@ -1,6 +1,0 @@
-<hosts>
-	<host name="sun.localdomain">
-		<location>seattle</location>
-		<duty>weblogic</duty>
-	</host>
-</hosts>

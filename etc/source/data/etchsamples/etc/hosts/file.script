@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+
+use File::Cat;
+
+if (grep($_ eq 'apps', @CLUSTERS))
+{
+        File::Cat::cat($ORIGINAL_FILE, \*CONFIG);
+        File::Cat::cat('file.script_apps', \*CONFIG);
+}

@@ -1,0 +1,6 @@
+<!-- alternative filename, conf.xml, -->
+<config>
+	<directory>
+		<create duty="weblogic"/>
+	</directory>
+</config>

@@ -1,0 +1,4 @@
+# Include uname description in header
+# ::ETCH:exec(uname -a)::
+search localdomain
+nameserver 127.0.0.1

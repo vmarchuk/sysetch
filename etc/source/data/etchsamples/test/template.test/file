@@ -1,0 +1,10 @@
+# Get value from perl, command line, and duty pattern match
+# execute perl output
+domain=::ETCH:perl( $HOSTNAME =~ /(.*?)\.(.*)/; print $2; )::
+hostname=::ETCH:perl($HOSTNAME)::
+
+# include output from command line
+os=::ETCH:exec(uname -s)::
+
+# regex match on duty name, ie: @ == (.*)
+type=::ETCH:duty(ctl_env_@)::

@@ -1,0 +1,10 @@
+<config>
+        <file>
+                <!-- use ; instead of # for comments -->
+                <comment_line>; </comment_line>
+                <source>
+                	<plain template="true" duty="weblogic" os="linux">file.weblogic</plain>
+                        <plain os="linux">file</plain>
+                </source>
+        </file>
+</config>
