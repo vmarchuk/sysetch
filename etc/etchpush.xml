@@ -23,7 +23,7 @@
 	     #	Install etch files via pull:
 	     #		# depothost can be predetermined by running a script before ssh to figure out $depothost
 	     #		ssh -q -o StrictHostKeyChecking=no ::HOST:: "rsync -aiO --progress --stats depothost::utils/ /data/utils/"
-	     rsync --rsync-path="sudo mkdir -p /data/utils sudo chown vagrant:vagrant /data/utils && env rsync" -aiO --progress --stats --exclude=.git --exclude=/logs/ /data/utils/ ::HOST:::/data/utils/
+	     rsync --rsync-path="sudo mkdir -p /opt/etch && sudo chown vagrant:vagrant /opt/etch && env rsync && uname -a" -aiO --progress --stats --exclude=.git --exclude=/logs/ /data/utils/ ::HOST:::/data/utils/
 	]]></remotesetup>
 
 	<!-- remote connect method -->
