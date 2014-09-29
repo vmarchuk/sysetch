@@ -15,7 +15,6 @@
 
 	<!-- Command to sync etch configuration to remote host: bootstrap
 		::HOST:: is replaced via real hostname
-		::CONNECT:: is replaced with default connect connect method, configured below
 	-->
 	<remotesetup><![CDATA[
 	     #Examples:
@@ -24,7 +23,7 @@
 	     #	Install etch files via pull:
 	     #		# depothost can be predetermined by running a script before ssh to figure out $depothost
 	     #		ssh -q -o StrictHostKeyChecking=no ::HOST:: "rsync -aiO --progress --stats depothost::utils/ /data/utils/"
-	     rsync -e '::CONNECT::' --rsync-path="sudo mkdir -p /opt/etch && sudo chown vagrant:vagrant /opt/etch && env rsync" -aiO --progress --stats --exclude=.git --exclude=/logs/ /opt/etch/ ::HOST:::/opt/etch/
+	     rsync -e 'ssh -q -o StrictHostKeyChecking=no' --rsync-path="sudo mkdir -p /opt/etch && sudo chown vagrant:vagrant /opt/etch && env rsync" -aiO --progress --stats --exclude=.git --exclude=/logs/ /opt/etch/ ::HOST:::/opt/etch/
 	]]></remotesetup>
 
 	<!-- remote connect method -->
