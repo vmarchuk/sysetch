@@ -2691,6 +2691,7 @@ sub etchpush
 	{
 		my $c = $cfg->getNodeText("/config/remotesetup");
 		$c =~ s/::HOST::/$host/g;
+		$c =~ s/::CONNECT::/$defaultconnect/g;
 		&display("COLOR:green:Bootstrapping: $host\n");
 		&logprepush();
 		my $ret = &runcmd('', $c, 1);
