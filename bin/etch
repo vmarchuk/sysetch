@@ -2255,7 +2255,7 @@ sub loadhooks()
 
 sub initsystem()
 {
-        our $LOG = $defaults_xpath->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs"
+        our $LOG = $defaults_xpath->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs";
         warn "LOG not configured in defaults, not logging.\n" if (!$LOG);
         our $LOGDAYS=$defaults_xpath->getNodeText('/config/LOGDAYS') || 30;
         $LOGDAYS = int($LOGDAYS);
@@ -3016,7 +3016,7 @@ sub log
 sub loginit()
 {
 	return if (!$LOG);
-	mkdir($LOG, 0755) if (! -d $LOG);
+	&makepath($LOG, 0, '0755') if (! -d $LOG);
 
 	our $PRE='    ';
 	# set prefix for log print
