@@ -1,8 +1,8 @@
 <config>
 	<PATH>/bin:/usr/bin:/usr/local/bin</PATH>
-        <LOG>/sites/utils/local/var/log/etch</LOG>
+        <LOG></LOG>
 	<LOGDAYS>60</LOGDAYS>
-        <VARBASE>/sites/utils/local/var/etch</VARBASE>
+        <VARBASE></VARBASE>
 
 	<file>
 		<perms>444</perms>
@@ -21,8 +21,7 @@
 		<options>-aiO --delete --exclude=.git --exclude=.svn --exclude='*.swp'</options>
 	</rsync>
 	<forbiddenhosts>
-		<host>area.*</host>
-		<host>ndnareab01</host>
+		<host>test3</host>
 	</forbiddenhosts>
 </config>
 

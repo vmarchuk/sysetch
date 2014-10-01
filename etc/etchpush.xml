@@ -1,6 +1,6 @@
 <!-- Configuration setting for etchpush -->
 <config>
-        <LOG>/data/utils/logs/etchpush</LOG>
+        <LOG></LOG>
         <LOGDAYS>60</LOGDAYS>
 
 	<!-- Local command to run to sync local etch configuration  -->

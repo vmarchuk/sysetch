@@ -2255,7 +2255,7 @@ sub loadhooks()
 
 sub initsystem()
 {
-        our $LOG = $defaults_xpath->getNodeText('/config/LOG');
+        our $LOG = $defaults_xpath->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs"
         warn "LOG not configured in defaults, not logging.\n" if (!$LOG);
         our $LOGDAYS=$defaults_xpath->getNodeText('/config/LOGDAYS') || 30;
         $LOGDAYS = int($LOGDAYS);
@@ -2542,7 +2542,7 @@ sub parsecommandline()
         our $defaults_xpath = XML::XPath->new(filename => "$CONFIGBASE/defaults.xml");
 
         # set global settings
-        our $VARBASE = $defaults_xpath->getNodeText('/config/VARBASE');
+        our $VARBASE = $defaults_xpath->getNodeText('/config/VARBASE') || "$ETCH_PREFIX/var";
         &away("VARBASE is not set in $CONFIGBASE/defaults.xml\n") if (!$VARBASE);
         our $ORIGBASE =  "$VARBASE/orig";
         our $LOCKBASE =  "$VARBASE/locks";
@@ -2653,7 +2653,7 @@ sub etchpush
 		}
 	}
 
-        our $LOG = $cfg->getNodeText('/config/LOG');
+        our $LOG = $cfg->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs";
         warn "LOG not configured in defaults, not logging.\n" if (!$LOG);
         our $LOGDAYS=$cfg->getNodeText('/config/LOGDAYS') || 30;
         $LOGDAYS = int($LOGDAYS);
