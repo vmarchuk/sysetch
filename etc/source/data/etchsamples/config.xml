@@ -1,4 +1,5 @@
 <config>
+	<runas>vagrant</runas>
         <directory>
         	<!-- <owner>username</owner> -->
         	<!-- <group>groupname</group> -->
