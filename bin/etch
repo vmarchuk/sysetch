@@ -477,7 +477,6 @@ sub process_runas
 
 	# Activate post runas
 	# GENERATETEST will always use 'post' as priority over 'pre'
-	print "process_runas()";
 	
 	if ($GENERATETEST{'runas_sudo_post'} && !$test)
 	{
@@ -516,6 +515,8 @@ sub process_runas
 			delete $GENERATETEST{'runas_sudo_pre'};
 		}
 	}
+
+	print "process_runas($newuser)\n";
 
 	# exit if $newuser is not set
 	return 0 if (!$newuser);
