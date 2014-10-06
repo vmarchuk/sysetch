@@ -567,7 +567,7 @@ sub process_runas
                         }
                         elsif ( $i !~ /\($newuser|ALL\) NOPASSWD: $ETCH/ )
                         {
-                                &away("ERROR! User '$SYSTEMOWNER' does not have sudo to etch $file via user '$newuser'");
+                                &away("$i\nERROR! User '$SYSTEMOWNER' does not have sudo to etch $file via user '$newuser'");
                         }
                 }
 
