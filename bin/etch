@@ -497,7 +497,7 @@ sub process_runas
 				if ($test) { $GENERATETEST{'runas_sudo_pre'} = $post; }
 				else       { $GENERATETEST{'runas_sudo_post'} = $post; }
 			}
-			elsif ( $pre ne 'TEXT_NOT_FOUND')
+			elsif ( $test && $pre ne 'TEXT_NOT_FOUND')
 			{
 				$GENERATETEST{'runas_sudo_pre'} = $pre;
 				return(1);
@@ -567,7 +567,7 @@ sub process_runas
                         }
                         elsif ( $i !~ /\($newuser|ALL\) NOPASSWD: ($ETCH|ALL)/ )
                         {
-                                &away("$i\nERROR! User '$SYSTEMOWNER' does not have sudo to etch $file via user '$newuser'");
+                                &away("ERROR! User '$SYSTEMOWNER' does not have sudo to etch $file via user '$newuser'");
                         }
                 }
 
