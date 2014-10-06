@@ -41,7 +41,7 @@ $VERSION='1.0';
 
 
 # list of things to share with external scripts - do not modify here, modify in hooks
-our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '$LINUXDISTROVERSION', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
+our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '$LINUXDISTROVERSION', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
 
 #################################################
 # no user defined variables below
@@ -1417,6 +1417,13 @@ sub check_for_inconsistency
 	#	&away("Inconsistent entry for $file\n") if ($node_text ne $first_node_text);
 	#}
 	return 0;
+}
+
+# returns contents of a file
+sub cat
+{
+	my $file = shift || &bug("No file received");
+	return &compare_file_contents($file);
 }
 
 # Returns true if the new contents are different from the current file,
