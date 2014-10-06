@@ -1,4 +1,5 @@
 #!/bin/bash
+# -*- mode: Perl -*-
 
 function path-canonical-simple()
 {
@@ -1423,14 +1424,9 @@ sub check_for_inconsistency
 sub cat ($$) {
 	my ($input, $handle) = @_;
 
-	unless (ref \$input eq 'GLOB' or ref \$input eq 'REF') {
-		open FILE, $input or return;
-	}
-	while (<FILE>) {
-		print $handle $_;
-	}
-	close FILE;
-	
+	open FILE, $input  || &bug("No file received");
+	map { print $handle $_ } <FILE>;
+	close(FILE);	
 	return (1);
 }
 
