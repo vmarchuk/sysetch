@@ -491,6 +491,7 @@ sub process_runas
 		{
 			my $pre =  sprintf('%s', $xpath->getNodeText("/config/runas[\@when='pre']")  || 'TEXT_NOT_FOUND');	
 			my $post = sprintf('%s', $xpath->getNodeText("/config/runas[\@when='post']") || 'TEXT_NOT_FOUND');
+			print "$pre : $post\n";
 			if ($post ne 'TEXT_NOT_FOUND')
 			{
 				if ($test) { $GENERATETEST{'runas_sudo_pre'} = $post; }
@@ -501,6 +502,8 @@ sub process_runas
 				$GENERATETEST{'runas_sudo_pre'} = $pre;
 				return(1);
 			}
+			use Data::Dumper;
+			print Dumper %GENERATETEST;
 		}
         	elsif(exists $GENERATETEST{'runas_sudo_pre'} && !$test)
         	{
