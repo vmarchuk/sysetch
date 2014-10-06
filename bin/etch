@@ -489,9 +489,8 @@ sub process_runas
 	{
 		if ($xpath->exists("/config/runas") && !$newuser)
 		{
-			my $pre =  sprintf('%s', $xpath->getNodeText("/config/runas")  || 'TEXT_NOT_FOUND');	
+			my $pre =  sprintf('%s', $xpath->getNodeText("/config/runas[\@when='pre']")  || 'TEXT_NOT_FOUND');	
 			my $post = sprintf('%s', $xpath->getNodeText("/config/runas[\@when='post']") || 'TEXT_NOT_FOUND');
-			print "TEST: $pre\n";
 			if ($post ne 'TEXT_NOT_FOUND')
 			{
 				if ($test) { $GENERATETEST{'runas_sudo_pre'} = $post; }
