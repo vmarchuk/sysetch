@@ -565,7 +565,7 @@ sub process_runas
                         {
                                 &away("ERROR! Problem with running following command: $cmd\n");
                         }
-                        elsif ( $i !~ /\($newuser|ALL\) NOPASSWD: $ETCH/ )
+                        elsif ( $i !~ /\($newuser|ALL\) NOPASSWD: ($ETCH|ALL)/ )
                         {
                                 &away("$i\nERROR! User '$SYSTEMOWNER' does not have sudo to etch $file via user '$newuser'");
                         }
