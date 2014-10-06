@@ -497,13 +497,11 @@ sub process_runas
 				if ($test) { $GENERATETEST{'runas_sudo_pre'} = $post; }
 				else       { $GENERATETEST{'runas_sudo_post'} = $post; }
 			}
-			elsif ($test && $pre ne 'TEXT_NOT_FOUND')
+			elsif ($pre ne 'TEXT_NOT_FOUND')
 			{
 				$GENERATETEST{'runas_sudo_pre'} = $pre;
 				return(1);
 			}
-			use Data::Dumper;
-			print Dumper %GENERATETEST;
 		}
         	elsif(exists $GENERATETEST{'runas_sudo_pre'} && !$test)
         	{
