@@ -1420,10 +1420,18 @@ sub check_for_inconsistency
 }
 
 # returns contents of a file
-sub cat
-{
-	my $file = shift || &bug("No file received");
-	return &compare_file_contents($file, '');
+sub cat ($$) {
+	my ($input, $handle) = @_;
+
+	unless (ref \$input eq 'GLOB' or ref \$input eq 'REF') {
+		open FILE, $input or return;
+	}
+	while (<FILE>) {
+		print $handle $_;
+	}
+	close FILE;
+	
+	return (1);
 }
 
 # Returns true if the new contents are different from the current file,
@@ -1441,7 +1449,7 @@ sub compare_file_contents
 	if (-f $file)
 	{
 		my $contents = '';
-		open(FILE, '<', $file) || &away("unable to open current file $file:  $!\n");
+		open(FILE, '<', $file) || &away("Unable to open current file $file:  $!\n");
 		while(<FILE>)
 		{
 			$contents .= $_;
