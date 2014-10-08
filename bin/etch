@@ -138,6 +138,7 @@ sub generateall($$$)
 	sub findgenerated
 	{
 		my $file = shift;
+		$GENERATED{$file} = 1 if (exists $GENERATEDinit{$file});
 		return 1 if ( exists $GENERATED{$file} );
 		return 1 if ( grep { $file =~ /^$_/  } @{$GENERATED{'regex'}} );
 
@@ -480,27 +481,30 @@ sub process_runas
 	
 	if ($GENERATETEST{'runas_sudo_post'} && !$test)
 	{
-		$file .= "/*" if ($when eq 'post');
        		$newuser = $GENERATETEST{'runas_sudo_post'};
 		delete $GENERATETEST{'runas_sudo_post'};	
 	}
-
+	
 	if ($when ne 'post')
 	{
 		if ($xpath->exists("/config/runas") && !$newuser)
 		{
-			my $pre =  sprintf('%s', $xpath->getNodeText("/config/runas[\@when='pre']")  || 'TEXT_NOT_FOUND');	
-			my $post = sprintf('%s', $xpath->getNodeText("/config/runas[\@when='post']") || 'TEXT_NOT_FOUND');
-			print "$test : $pre : $post\n";
+			my @nodes = $xpath->findnodes('/config/runas');
+			my ($pre, $post) = ('TEXT_NOT_FOUND', 'TEXT_NOT_FOUND');
+			foreach my $node ( @nodes )
+			{
+				my $when = $node->getAttribute('when');
+				if ($when eq 'pre' || !$when) { $pre = $node->string_value; }
+				elsif ($when eq 'post')      { $post = $node->string_value; }
+			}
 			if ($post ne 'TEXT_NOT_FOUND')
 			{
 				if ($test) { $GENERATETEST{'runas_sudo_pre'} = $post; }
-				else       { $GENERATETEST{'runas_sudo_post'} = $post; }
+				else       { $GENERATETEST{'runas_sudo_pre'} = $pre; $GENERATETEST{'runas_sudo_post'} = $post; }
 			}
-			elsif ( $test && $pre ne 'TEXT_NOT_FOUND')
+			elsif ( $pre ne 'TEXT_NOT_FOUND')
 			{
 				$GENERATETEST{'runas_sudo_pre'} = $pre;
-				return(1);
 			}
 		}
         	elsif(exists $GENERATETEST{'runas_sudo_pre'} && !$test)
@@ -516,9 +520,6 @@ sub process_runas
 			delete $GENERATETEST{'runas_sudo_pre'};
 		}
 	}
-
-	print "process_runas($newuser)\n";
-
 	# exit if $newuser is not set
 	return 0 if (!$newuser);
 
@@ -538,7 +539,10 @@ sub process_runas
         	return(2);
         }
 
-	&log("Switching user to $newuser for $file\n", 6);
+	# only have new process work on children paths when in post mode
+	$file .= "/@" if ($when eq 'post');
+
+	&log("Switching user ($when) to $newuser for $file\n", 6);
 
         # Verify if we can switch users via sudo
         # if root, then dont bother checking
@@ -584,7 +588,7 @@ sub process_runas
         &unlock_currently_locked_file();
         &log("Running etch as user '$newuser' from '$SYSTEMOWNER' for $file\n", $debug);
 	&log($DIV, $debug);
-        my @cmd = ($sudo, '-S', '-u', $newuser, $ETCH, $file, @OPTIONS);
+        my @cmd = ($sudo, '-S', '-u', $newuser, $ETCH, $file, @OPTIONS, '--sudo');
         &log("\t". join(' ', @cmd) ."\n", 6);
         open CMD, '-|' or exec @cmd, "--runas=$PS", "2>&1";
         while(<CMD>)
@@ -594,7 +598,7 @@ sub process_runas
         close(CMD);
 
         &away("ERROR:$? detected in runas $newuser for $file") if ($? != 0);
-        &log($DIV, $debug);
+        &log("\n$DIV", $debug);
         &log("Done with etch as user $newuser for $file\n", $debug);
 
         # let outside know that we have sudo'd
@@ -1141,7 +1145,7 @@ sub readfile
 sub chown($$$$)
 {
         my ($uid, $gid, $file, $debug) = @_;
-        &bug("incorrect params") if (! defined $uid || ! defined $gid || ! defined $file);
+        &bug("incorrect params: ($uid, $gid, $file, $debug)") if (! defined $uid || ! defined $gid || ! defined $file);
 
         sub chownfile
         {
@@ -2028,7 +2032,7 @@ sub lookup_gid
 		return $getgrnamC{$g} if (exists $getgrnamC{$g});
 
 		my $i = getgrnam($g);
-		if (! defined $g)
+		if (! defined $i)
 		{	
 			&log("config.xml requests group $g, but that group can't be found. Using GID $SYSTEMGID.\n"); 
 			return $SYSTEMGID;
@@ -2496,6 +2500,7 @@ sub parsecommandline()
 	our $dryrun;
 	our $timestamp;
 	our $generateall;
+	our %GENERATEDinit; # used by findgenerated to skip special paths, commonly used when adding '@' at end to indicate to only work on child paths
 	our $force;
 	our ($nolocalsetup, $boostrap, $info);
 	our $runas;	# ovewrites $TMPBASE and to indicate if we are in runas mode (ie: child of another etch)
@@ -2519,6 +2524,7 @@ sub parsecommandline()
         	'n|dry-run' => sub { $dryrun=1; push(@OPTIONS, "--dry-run"); },
         	't|timestamp' => sub { $timestamp=$_[1]; push(@OPTIONS, "--timestamp"); },
         	'g|generate-all' => sub { $generateall=$_[1]; push(@OPTIONS, "--generate-all"); },
+		'sudo' => sub { $generateall=0; push(@OPTIONS, "--sudo"); },
 		'list' => sub { $dryrun=9; push(@OPTIONS, '--list'); },
 		'i|info:s' => sub { $info=$_[1] || 'info'; $debug=0; },
         	'runas=i' => sub { $runas=$_[1]; push(@OPTIONS, "--runas=$runas"); },
@@ -2544,7 +2550,12 @@ sub parsecommandline()
 	our @manualfiles;
 	our $manualfile;
 
-	map { $generateall = 1 if ($_ eq '/'); push(@manualfiles, $_) } @ARGV;
+	map 
+	{ 	
+		$generateall = 1 if ($_ eq '/'); 
+		if ( $_ =~ /(.*?)\/\@$/ ) { $GENERATEDinit{$1}=1; s/\/\@$/\//; }
+		push(@manualfiles, $_);
+	} @ARGV;
 	@manualfiles = ('/') if ($generateall || ($dryrun == 9 && !@manualfiles));
 	our @manualfilesOriginal = @manualfiles if (!$generateall);
 
@@ -3085,6 +3096,12 @@ sub bug
 	my $msg = "BUG: ". ($BUGMSG?"($BUGMSG)\n":"") ." ". shift;
 	my $noexit = shift || 0;
 
+	# find out starting point of self
+	open(f, $ETCH);
+	my $lcount=0;
+	while(<f>) { last if (/^#\!.*?perl/); $lcount++; }
+	close(f);
+
 	my @roadmap;
 	# build roadmap that led to bug
 	no warnings;
@@ -3092,6 +3109,7 @@ sub bug
 	{
 		my $l = (caller($i-1))[2];
 		next if (!$l);
+		$l += $lcount;
 		my $f = (caller($i))[3] || 'main';
 		next if ($f eq 'main::__ANON__');
 		unshift(@roadmap, "${f}():${l}") ;

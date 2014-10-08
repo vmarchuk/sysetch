@@ -1,0 +1,11 @@
+<config>
+	<runas>root</runas>
+	<!-- runas when="pre">root</runas> -->
+	<runas when="post">vagrant</runas>
+        <directory>
+                <owner>vagrant</owner>
+                <group>groupname</group>
+                <perms>775</perms>
+                <create/>
+        </directory>
+</config>

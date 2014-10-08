@@ -1,5 +1,6 @@
 <config>
-	<runas>vagrant</runas>
+        <!-- <runas>vagrant</runas> -->
+	<!-- <runas when="post">root</runas> -->
         <directory>
         	<!-- <owner>username</owner> -->
         	<!-- <group>groupname</group> -->
