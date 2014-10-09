@@ -1,3 +1,5 @@
+Documentation: http://www.sysetch.com/
+
 Etch is a tool for managing the configuration of Unix systems. Etch can manage text or binary files, links and directories. The contents of files can be supplied from static files or generated on the fly by scripts or templates. Permissions and ownership as well as any pre or post commands to run when updating the file are configured in simple XML files.
 Etch has a system of classifying systems via both automatically determined and human-assigned attributes, as well as a very powerful system for building configuration files and associating actions and test conditions with updates to those files.
 
