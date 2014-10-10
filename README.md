@@ -1,18 +1,26 @@
+SysEtch, configuration management done simple in perl.
 Documentation: http://www.sysetch.com/
 
-Etch is a tool for managing the configuration of Unix systems. Etch can manage text or binary files, links and directories. The contents of files can be supplied from static files or generated on the fly by scripts or templates. Permissions and ownership as well as any pre or post commands to run when updating the file are configured in simple XML files.
-Etch has a system of classifying systems via both automatically determined and human-assigned attributes, as well as a very powerful system for building configuration files and associating actions and test conditions with updates to those files.
+Credits:
+--------
+Vladimir Marchuk
+Jason Heiss
 
-Etch can help you with problems like:
+License:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Rapid deployment and scalability: If the configuration of systems in your environment is captured in etch the process of deploying new systems is simple, rapid and repeatable. New systems can be transformed from a stock OS install to fully configured in seconds. Need another system like that overloaded box? Just add the new host to the same groups as the source host (just a few lines in a simple XML file) and run etch. Seconds later and you've got a duplicate configuration.
-Disaster recovery: Need to duplicate your hosts in another location for disaster recovery or replace a host after a hardware failure? Just add the new hosts to the appropriate configuration groups and you're done.
-Compliance with SOX, PCI or other regulations: Using a consistent, repeatable tool like etch helps you demonstrate to your auditors good control of your environment.
-Etch is certainly not the only game in town. Cfengine and puppet are probably the two other most widely used system configuration management tools. So why use etch? Here are a few reasons:
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-Simplicity: In either cfengine or puppet you have a maze of classes, controls, modules, resources, etc. Where you store your configuration within your cfengine or puppet tree has no obvious correlation to where it ends up on your clients. You can and will spend hours, quite possibly days, studying manuals and searching the web just to get the simplest initial setup. In etch if you want to configure /etc/ntp.conf it goes in source/etc/ntp.conf/ End of story. No 200 page manual to pore over and still be left guessing whether your NTP configuration belongs in a module or a resource, or maybe both, or neither?
-Power: cfengine doesn't actually support doing much that is useful. So you end up using it as a framework for a bunch of little shell scripts you hack together. Puppet is somewhat better, but still lacking. Etch does one thing and does it very well: manage config files. It was designed so that you configure it to generally mimic what a system administrator would do to configure a system, including installing associated packages, inserting a whole configuration file (static or generated dynamically) or editing the default config file, restart association daemons, etc.
-Etch groups configuration by file. All of your configuration for a given file is in one place. But configuration for a given service may be located in several places in the repository if the service requires configuring multiple files. Most other popular tools group configuration by service or group. Your entire configuration for a given service (which may involve several files) is in one place. However, if multiple services need to make changes to a particular file the tool has to perform conflict resolution. Neither approach is clearly "right", but the etch approach does simplify troubleshooting if the resulting configuration isn't what you wanted, and as mentioned above reduces your confusion about where to put things in the repository.
-Etch supports three ways of building configuration files: from pre-built configuration, from templates, or completely on the fly via user-supplied scripts. Most tools limit you to one or two of those options. But by far the most unique feature of etch is that those scripts have read-only access to the original file, as saved by etch before it was modified, and can perform edits and transformations on its contents to produce the desired file. The original contents never change, so if you decide an edit is no longer desired you simply remove it from your script and it is not applied the next time etch runs. The edit process is automatically idempotent, as your edits are always applied to the original, not an already edited file.
-
-More documentation can be found at: http://www.sysetch.com/
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
