@@ -1,1 +1,6 @@
 # 1.0
+- <runas> block bug fixed, was not working as intended in post mode
+- added source.d/ for ability to have multiple source repositories
+  for example: use main source for generic, assign env_prod, env_test,
+  env_perf, etc... duties to different types of host to create a degree of
+  seperation between different environment teams
