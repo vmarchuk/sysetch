@@ -4,7 +4,7 @@ Documentation: http://www.sysetch.com/
 
 -------
 Credits:
-Vladimir Marchuk, Jason Heiss
+Vladimir Marchuk, AT&T, Jason Heiss
 
 -------
 License:
