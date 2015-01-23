@@ -36,7 +36,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.0';
+$VERSION='1.0.1';
 
 # Make sure all perl modules exist before using
 
@@ -2920,7 +2920,7 @@ sub usage
 			"\t--config=DIRECTORY     Use this config directory, default is in etc/etch\n".
 			"\t                         Useful when you want to have multiple teams work\n".
 			"\t                         on different parts of the system.\n";
-	if (basename($ENV{'ETCH'}) =~ /^etchpush/)
+	if ($ETCH_BASE =~ /^etchpush/)
 	{
         $help =	        "Usage: etchpush HOSTNAME [options] </path/to/etch | -g | -i --list>\n".
 			"Etchpush is a bootstrap wrapper for etch.\n".

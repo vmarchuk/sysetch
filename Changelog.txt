@@ -1,3 +1,5 @@
+# 1.0.1
+- Bugfix where etchpush would not show proper usage output
 # 1.0
 - <runas> block bug fixed, was not working as intended in post mode
 - added source.d/ for ability to have multiple source repositories
