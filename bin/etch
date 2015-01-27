@@ -36,7 +36,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.0.1';
+$VERSION='1.0.1a';
 
 # Make sure all perl modules exist before using
 
@@ -3041,7 +3041,6 @@ sub log
 sub loginit()
 {
 	return if (!$LOG);
-	&makepath($LOG, 0, '0755') if (! -d $LOG);
 
 	our $PRE='    ';
 	# set prefix for log print
@@ -3050,6 +3049,7 @@ sub loginit()
 	my $now = time;
 	my @t = localtime($now);
 	our $LOGFILE = "$LOG/etch-". sprintf('%4d%02d%02d%02d%02d%02d', $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+	&makepath($LOG, 0, '0755');
 	@t = localtime($now - $LOGDAYS * 86400);
 	my $expire = sprintf('%4d%02d%02d000000', $t[5]+1900, $t[4]+1, $t[3]);
 

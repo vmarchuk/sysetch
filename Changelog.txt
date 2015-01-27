@@ -1,3 +1,5 @@
+# 1.0.1a
+- Bugfix where etch would not create initial logs directory
 # 1.0.1
 - Bugfix where etchpush would not show proper usage output
 # 1.0
