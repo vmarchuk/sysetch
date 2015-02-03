@@ -1,3 +1,9 @@
+# 1.0.2
+- Added ::DEFAULT:: configuration value. This will be used as a placeholder to
+represent default options, ie: <rsync options="::DEFAULT:: --numeric-ids"/>
+will append numeric-ids to default rsync options instead of previous behavior
+of overwriting default rsync options. 
+NOTE: currently only works for rsync
 # 1.0.1a
 - Bugfix where etch would not create initial logs directory
 # 1.0.1
