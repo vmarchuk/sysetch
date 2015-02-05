@@ -36,7 +36,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.0.2';
+$VERSION='1.0.2a';
 
 # Make sure all perl modules exist before using
 
@@ -1749,7 +1749,7 @@ sub process_rsync($$)
 	# eval $src just in case we want to use a variable
 	# Use autogen depot if rsync src is empty
 	my $src = eval "\"$string\"";
-	$src = $RSYNC_SRC . $src if ($src =~ /^::/ && $RSYNC_SRC);
+	$src = $RSYNC_SRC . $src if ($src =~ /^:/ && $RSYNC_SRC);
 	if (!$src)
 	{
 		if ($RSYNC_SRC)
