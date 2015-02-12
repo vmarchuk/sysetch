@@ -1,10 +1,13 @@
-SysEtch, configuration management done simple in perl.
+SysEtch, configuration management and automation simplified.
 
 Documentation: http://www.sysetch.com/
 
 -------
 Credits:
-Vladimir Marchuk, AT&T, Jason Heiss
+Vladimir Marchuk
+AT&T
+Jason Heiss
+University of Washington
 
 -------
 License:
