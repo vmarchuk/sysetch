@@ -2937,7 +2937,7 @@ sub usage
 	{
 		$help =		"Usage: etch [options] </path/to/etch | -g>\n".$help;
 	}
-	$help =		"SysEtch, configuration management done simple. Version: $VERSION. http://www.sysetch.com\n". $DIV . $help;
+	$help =		"SysEtch, configuration management and automation simplified. Version: $VERSION. http://www.sysetch.com\n". $DIV . $help;
 	&display($help);
 	exit;
 }
