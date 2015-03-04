@@ -1793,7 +1793,7 @@ sub process_rsync($$)
 	$command = $defaults_xpath->getNodeText("/config/rsync/command") if (!$command);
 	$exclude = $defaults_xpath->getNodeText("/config/rsync/exclude") if (!$exclude);
 	my $defaultOptions = $defaults_xpath->getNodeText("/config/rsync/options");
-	if ($options) { $options =~ s/::OPTIONS::/$defaultOptions/; } # Allow for appending to default options
+	if ($options) { $options =~ s/::DEFAULT::/$defaultOptions/; } # Allow for appending to default options
 	else { $options = $defaultOptions; }
 	$options .= " --exclude='${exclude}'" if ($exclude);
 	$options .= " --exclude-from=${excludefrom}" if ($excludefrom);
