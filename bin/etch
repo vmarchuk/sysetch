@@ -1,14 +1,15 @@
 #!/bin/bash
 # -*- mode: Perl -*-
 
-function pathcanonicalsimple()
+function path-canonical-simple()
 {
+        # http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
         local dst="${1}"
         cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
 }
-function pathcanonical()
+function path-canonical()
 {
-        local dst="$(pathcanonicalsimple "${1}")"
+        local dst="$(path-canonical-simple "${1}")"
 
         while [[ -h "${dst}" ]]; do
                 local linkDst="$(ls -l "${dst}" | sed -r -e 's/^.*[[:space:]]*->[[:space:]]*(.*)[[:space:]]*$/\1/g')"
@@ -16,12 +17,12 @@ function pathcanonical()
                         # relative link destination
                         linkDst="$(dirname "${dst}")/${linkDst}"
                 fi
-                dst="$(pathcanonicalsimple "${linkDst}")"
+                dst="$(path-canonical-simple "${linkDst}")"
         done
         echo "${dst}"
 }
 
-etch=$(pathcanonical $0)
+etch=$(path-canonical $0)
 prefix=$(dirname $(dirname $etch))
 env="$prefix/etc/etch/env"
 [ -f $env ] && source $env
@@ -35,13 +36,13 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.0.2b';
+$VERSION='1.0.3';
 
 # Make sure all perl modules exist before using
 
 
 # list of things to share with external scripts - do not modify here, modify in hooks
-our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '$LINUXDISTROVERSION', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
+our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
 
 #################################################
 # no user defined variables below
@@ -1321,11 +1322,6 @@ sub check_attributes
 				if ($negate)	{ $found = 0 if ( $LINUXDISTRO =~ /^$val$/ ); }
 				else		{ $found = 0 if ( $LINUXDISTRO !~ /^$val$/ ); }
 			}
-			elsif ($key eq 'linuxdistroversion')
-			{
-				if ($negate) 	{ $found = 0 if ($LINUXDISTROVERSION =~ /^$val$/ ); }
-				else		{ $found = 0 if ($LINUXDISTROVERSION !~ /^$val$/ ); }
-			}
                         elsif ($key eq 'duty')
                         {
 				if ($negate) 	{ $found = 0 if (   grep { /^$val$/ } @DUTIES ); }
@@ -2295,57 +2291,36 @@ sub initsystem()
 # be shared with a Safe compartment.
 sub findsystem
 {
-	our ($FULLARCH, $ARCH, $OS, $OSVERSION, $HOSTNAME, $LINUXDISTRO, $LINUXDISTROVERSION);
+	our ($FULLARCH, $ARCH, $OS, $OSVERSION, $HOSTNAME, $LINUXDISTRO);
 
-	($OS, $HOSTNAME, $OSVERSION, $FULLARCH) = split(/\s+/, lc(`uname -prsn`));
-	($ARCH) = split('_', $FULLARCH); 	
+	my $uname = `uname -prs`; chomp($uname);
+	($OS, $OSVERSION, $FULLARCH) = split(/\s+/, lc($uname));
+        ($ARCH) = split('_', $FULLARCH);
+	$HOSTNAME = `hostname -f`; chomp($HOSTNAME);
 
 	our $LINUXDISTRO = '';
-	our $LINUXDISTROVERSION = '';
-	if ($OS eq 'Linux')
+	if ($OS eq 'linux')
 	{	
         	if (-f '/etc/redhat-release')
         	{
-                	open(RR, '<', '/etc/redhat-release') || &away("unable to open /etc/redhat-release: $!\n");
-                	my $rr = <RR>;
-                	close(RR);
-			if ($rr =~ /Red Hat Linux release ([\d\.]+)/)
-                	{
-                        	$LINUXDISTRO = 'Red Hat';
-                        	$LINUXDISTROVERSION = $1;
-                	}
-                	elsif ($rr =~ /Red Hat Linux Advanced Server release ([\d\.]+)/)
-                	{
-                        	$LINUXDISTRO = 'Red Hat';
-                        	$LINUXDISTROVERSION = "EL $1 AS";
-                	}
-                	elsif ($rr =~ /Red Hat Enterprise Linux (AS|ES|WS) release ([\d\.]+)/)
-                	{
-                        	$LINUXDISTRO = 'Red Hat';
-                        	$LINUXDISTROVERSION = "EL $2 $1";
-                	}
-                	elsif ($rr =~ /Fedora Core release ([\d\.]+)/)
-                	{
-                        	$LINUXDISTRO = 'Red Hat';
-                        	$LINUXDISTROVERSION = "FC $1";
-                	}
+			$LINUXDISTRO = 'redhat';
         	}
         	# The rest of these haven't been completed or tested
         	elsif (-f '/etc/SuSE-release')
         	{
-                	$LINUXDISTRO = 'SuSE';
+                	$LINUXDISTRO = 'suse';
         	}
         	elsif (-f '/etc/mandrake-release')
         	{
-                	$LINUXDISTRO = 'Mandrake';
+                	$LINUXDISTRO = 'mandrake';
         	}
         	elsif (-f '/etc/debian_version')
         	{
-                	$LINUXDISTRO = 'Debian';
+                	$LINUXDISTRO = 'debian';
         	}
         	elsif (-f '/etc/slackware-release')
         	{
-                	$LINUXDISTRO = 'Slackware';
+                	$LINUXDISTRO = 'slackware';
         	}
 	}
 
@@ -2388,19 +2363,14 @@ sub listsystem
                                    }
 
 	if    ($arg eq 'os')   	{ &display("$OS\n"); }
-       	elsif ($d > 1)	       	{ &display("OS: $OS\n"); }
+	elsif ($arg eq 'osversion') { &display("$OSVERSION\n"); }
+       	elsif ($d > 1)	       	{ &display("OS: $OS, OSVERSION: $OSVERSION\n"); }
 
-	if    ($arg eq 'osversion') { &display("$OSVERSION\n"); }
-	elsif ($d > 1)	       	    { &display("OSVERSION: $OSVERSION\n"); }
+	if    ($arg eq 'linuxdistro')  { &display("$LINUXDISTRO\n"); }
+	elsif ($LINUXDISTRO && $d > 1) { &display("LINUXDISTRO: $LINUXDISTRO\n"); }
 
 	if    ($arg eq 'hostname')  { &display("$HOSTNAME\n"); }
        	elsif ($d > 1)		    { &display("HOSTNAME: $HOSTNAME\n"); }
-
-	if    ($arg eq 'linuxdistro') { &display("$LINUXDISTRO\n"); }
-	elsif ($LINUXDISTRO && $d > 1)    { &display("LINUXDISTRO: $LINUXDISTRO\n"); }
-
-	if    ($arg eq 'linuxdistroversion') { &display("$LINUXDISTROVERSION\n"); }
-	elsif ($LINUXDISTROVERSION && $d > 1)    { &display("LINUXDISTROVERSION: $LINUXDISTROVERSION\n"); }
 
 	if    ($arg eq 'user/group') { &display("$SYSTEMOWNER/$SYSTEMGROUP\n"); }
 	elsif ($d > 1)	 	     { &display("USER/GROUP: $SYSTEMOWNER/$SYSTEMGROUP\n"); }
@@ -2409,15 +2379,15 @@ sub listsystem
 	elsif ($arg eq 'source') { &display(join(", ", @SOURCES)); }
 	elsif ($d)		 { &display("CONFIG: $CONFIGBASE\n". "SOURCE: " . join(', ', @SOURCES) ."\n" ); }
 
-	if    ($arg eq 'hardware')          { &display(join("\n", sort @HARDWARE)); }
+	if    ($arg eq 'hardware')          { &display(join("\n", sort @HARDWARE) ."\n"); }
         elsif (@HARDWARE && $arg eq 'info') { &display("HARDWARE: ". join("\n", map { $i++; ($i>1?"\t  ":'') ."$_"; } sort @HARDWARE) ."\n"); }
         elsif (@HARDAWRE && $d > 1)             { &display("HARDWARE: " . join(', ', @HARDWARE) . "\n"); }
 	
-	if    ($arg eq 'location')           { &display(join("\n", sort @LOCATION)); }
+	if    ($arg eq 'location')           { &display(join("\n", sort @LOCATION)."\n"); }
         elsif (@LOCATION && $arg eq 'info')  { my $i=0; &display("LOCATION: ". join("\n", map { $i++; ($i>1?"\t  ":'') ."$_"; } sort @LOCATION) ."\n"); }
         elsif (@LOCATION && $d > 1)             { &display("LOCATION: " . join(', ', @LOCATION) . "\n"); }
 
-	if    ($arg eq 'cluster')           { &display(join("\n", sort @CLUSTERS)); }
+	if    ($arg eq 'cluster')           { &display(join("\n", sort @CLUSTERS) ."\n"); }
         elsif (@CLUSTERS && $arg eq 'info') { my $i=0; &display("CLUSTER: ". join("\n", map { $i++; ($i>1?"\t ":'') ."$_"; } sort @CLUSTERS) ."\n"); }
         elsif (@CLUSTERS && $d > 1)             { &display("CLUSTER: " . join(', ', @CLUSTERS) . "\n"); }
 
@@ -2436,8 +2406,6 @@ sub listsystem
 		&display($DIV);
 	}
 	&display($DIV) if ($d);
-
-	&display("\n") if ($arg);
 }
 
 # Load hosts.xml

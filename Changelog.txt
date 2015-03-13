@@ -1,3 +1,8 @@
+# 1.0.3
+Modified HOSTNAME to be fqdn.
+Fixed LINUXDISTRO to properly display
+removed LINUXDISTROVERSION as tracking that is a slippery slope, if someone
+needs this info they can always create a hook and add a custom duty
 # 1.0.2
 - Added ::DEFAULT:: configuration value. This will be used as a placeholder to
 represent default options, ie: <rsync options="::DEFAULT:: --numeric-ids"/>
