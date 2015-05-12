@@ -1,3 +1,10 @@
+# 1.1
+rsync:
+ - added 'background' option to allow rsync to continue in background
+ - added 'refresh' option to allow rsync to only try every $refresh
+   seconds
+ - cleaned up output from <exec> to be more inline with rest of display
+ - minor display fixes
 # 1.0.3
 Modified HOSTNAME to be fqdn.
 Fixed LINUXDISTRO to properly display

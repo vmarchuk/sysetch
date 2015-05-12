@@ -36,7 +36,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.0.3';
+$VERSION='1.1.0';
 
 # Make sure all perl modules exist before using
 
@@ -106,6 +106,7 @@ sub main()
 	my $i=0;
 	foreach our $SOURCEBASE ( @SOURCES )
 	{
+		$ENV{'ETCH_SOURCEBASE'} = $SOURCEBASE;
 		# display source we are working on
 		&log($DIV) if ($i > 0);
 		&log("SOURCE: $SOURCEBASE ". ($dryrun == 9?'(LIST)':($dryrun?'(DRYRUN)':'')) ."\n");
@@ -225,12 +226,12 @@ sub generateall($$$)
 	{
 		foreach my $type ( ('setup', 'directory') )
 		{
-			our $FILE = $PROCESS_rsync->{parent};
+			our $FILE = $ENV{'ETCH_FILE'} = $PROCESS_rsync->{parent};
 			if (&ismine("/config/$type/rsync", $PROCESS_rsync->{xpath}, "START Etching $FILE via rsync process". ($dryrun?'(DRYRUN)':'') ."\n") && $dryrun != 9)
 			{
 				&process_rsync($type, $file, $PROCESS_rsync->{xpath}, $dryrun, $PROCESS_rsync);
 				&logprepop();
-				&log("END Etching $FILE via rsync process". ($dryrun?'(DRYRUN)':'') ."\n");
+				&log("END Etching $FILE via rsync process". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n");
 			}
 		}
 	}
@@ -343,7 +344,7 @@ sub generate
 
 		next if ( !$generateall && $manualfile && $file !~ /^$manualfile(\/|$)/);
 
-                our $FILE=$file;
+                our $FILE=$ENV{'ETCH_FILE'}=$file;
 
 		$ret1=0;
 
@@ -402,7 +403,7 @@ sub generate
 		
 		# Run post runas
 		&logprepop();
-		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ."\n") if ($dryrun != 9 && $ISMINE);
+		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n") if ($dryrun != 9 && $ISMINE);
 		return($ret) if( $ret = &process_runas($file, $xpath, $test, 'post') );
 	}
 
@@ -590,7 +591,7 @@ sub process_runas
 	&log($DIV, $debug);
         my @cmd = ($sudo, '-S', '-u', $newuser, $ETCH, $file, @OPTIONS, '--sudo');
         &log("\t". join(' ', @cmd) ."\n", 6);
-        open CMD, '-|' or exec @cmd, "--runas=$PS", "2>&1";
+        open CMD, '-|' or exec @cmd, "--runas=$RUNAS", "2>&1";
         while(<CMD>)
         {
                 print $_;
@@ -1284,6 +1285,9 @@ sub check_attributes
 	my $twig = shift;
 	my $element = shift;
 
+	my @duties = @DUTIES;
+	@duties = @MANUALDUTIES if (@MANUALDUTIES);
+
 	my %atts = %{$element->atts};
 	foreach my $key (keys %atts)
 	{
@@ -1324,8 +1328,8 @@ sub check_attributes
 			}
                         elsif ($key eq 'duty')
                         {
-				if ($negate) 	{ $found = 0 if (   grep { /^$val$/ } @DUTIES ); }
-				else	     	{ $found = 0 if ( ! grep { /^$val$/ } @DUTIES ); }
+				if ($negate) 	{ $found = 0 if (   grep { /^$val$/ } @duties ); }
+				else	     	{ $found = 0 if ( ! grep { /^$val$/ } @duties ); }
                         }
                         elsif ($key eq 'hardware')
                         {
@@ -1360,7 +1364,7 @@ sub ismine
 {
 	my $dst = shift;	
 	my $xpath = shift;
-	my $msg = shift || "START Etching $FILE ". ($dryrun?'(DRYRUN)':'') ."\n";
+	my $msg = shift || "START Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n";
 	our $ISMINE if (!defined $ISMINE);
 	$ISMINE='';
 	&log("Processing $FILE ". ($dryrun?'(DRYRUN)':''), 7 );
@@ -1650,7 +1654,7 @@ sub process_script
         # $ORIGINAL_FILE so that they can be shared with the Safe
         # compartment.
 
-        our $FILE = $file;
+        our $FILE = $ENV{'ETCH_FILE'} = $file;
 	our $FILEBASE = basename($file);
         our $DIR = dirname($FILE);
         our $ORIGINAL_FILE;
@@ -1766,7 +1770,7 @@ sub process_rsync($$)
 		}
 	}
 
-	my ($dst, $altdst, $command, $options, $exclude, $excludefrom);
+	my ($dst, $altdst, $command, $options, $exclude, $excludefrom, $background, $refresh);
 	my $manual = 0;
 	foreach my $attribute ($node->getAttributes())
 	{
@@ -1777,14 +1781,29 @@ sub process_rsync($$)
 		elsif ($key eq 'options') { $options = $val; }
 		elsif ($key eq 'dest')    { $altdst = $dst = $val;    }
 		elsif ($key eq 'manual')  { $manual = $val; }
+		elsif ($key eq 'background') { $background=1 if ($val eq 'true'); }
+		elsif ($key eq 'refresh')   { $refresh = $val; }
 	}
 
 	if ($manual && ! grep { /^$file/ } @manualfilesOriginal )
 	{
 		&log("Manual attribute set, not processing rsync because its not invoked manually.", 4);
-		return;
+		return(0);
 	}
-	
+
+	# If using 'refresh' mode then only proceed if timestamp has expired the value of $refresh
+	if ($refresh)
+	{
+		my $ts = time();
+		my $ets = &check_timestamp($FILE, 'refresh');
+		my $expired = $ts - $ets;
+		if ($expired < $refresh)
+		{
+			&log("Not processing 'refresh mode' rsync because its not yet expired, ". ($refresh - $expired) ." second(s) left.", 4);
+			return(0);
+		}
+	}
+
 	$dst = $file if (!$dst);
 	$command = $defaults_xpath->getNodeText("/config/rsync/command") if (!$command);
 	$exclude = $defaults_xpath->getNodeText("/config/rsync/exclude") if (!$exclude);
@@ -1806,8 +1825,8 @@ sub process_rsync($$)
 	{
 		if ($altdst) 
 		{ 
-			&log("Not processing subdirectory rsync because 'dest: $altdst' key exists in config"); 
-			return;
+			&log("Not processing subdirectory rsync because 'dest: $altdst' key exists in config."); 
+			return(0);
 		}
 		my $parent = $process_options->{parent};
 		my $subdir = $dst;
@@ -1852,42 +1871,88 @@ sub process_rsync($$)
 
 	my $cmd = "$command $options $src $dst";
 	&log("RSYNC: $cmd\n", $debug);
-        my $pid = open(CMD, "$cmd 2>&1 |") or &away("Couldnt run rsync for $file: $!\n");
-	my (@errors, $errorfound, $successfound);
-	my $start=0;
-        while(<CMD>)
-        {
-		if (!$start) { $start=1; &log($DIV, $debug); }
-		next if (/^\s/);
-		$errorfound = 1 if (/rsync error:/);
-		$successfound = 1 if (/\d+\s+speedup/);
-		if ( $errorfound ) { &display("COLOR:red:$)"); }	
-		elsif (/^receiving.*?list/)
-		{
-			next;	
-			#&log($DIV, 4);
-			#&log("rsync($src, $dst): $_", 4); 
-		}
-		elsif (/^(sent \d|total size is)/)
-		{
-			if ($errorfound) { &display("COLOR:red:$_"); }
-			else { &display("COLOR:yellow:$_"); }
-		}
-		else { &display("rsync($src, $dst): $_"); }
-		push(@errors, $_); 
-		shift(@errors) if ($#errors > 10);
-        }
-        close(CMD);
-	&log($DIV, $debug) if ($start == 1);
 
-	if ($errorfound || !$successfound)
+	if ( my @pids = &check_process("rsync.*$src $dst 2>&1") )
 	{
-		&log("ERRORS FOUND! $errorfound : $successfound $file => rsync($src, $dst)\n");
-		&log($DIV);
-        	map { &log("$_") } @errors;
-		&log($DIV);
-		&quit();
+		&log("Already running in background: @pids");
+		return(0);
 	}
+
+	my $bgpid;
+	my @errors;
+	pipe(PRSYNC_IPC, RSYNC_IPC);
+	unless($bgpid = fork())
+	{	
+		close(PRSYNC_IPC);
+		my ($ret, $errorfound, $successfound) = (0,0,0);
+		&log($DIV, $debug);
+		my $count=0;
+		my $inbackground=0;
+		my $pid = open(CMD, "$cmd 2>&1 |");
+        	while(<CMD>)
+        	{
+			next if (/^\s/);
+			$errorfound = 1 if (/rsync error:/);
+			$successfound = 1 if (/\d+\s+speedup/);
+			if ( $errorfound ) { &display("COLOR:red:$_"); }	
+			elsif (/^receiving.*?list/)
+			{
+				next;	
+			}
+			elsif (/^(sent \d|total size is)/)
+			{
+				if ($errorfound) { &display("COLOR:red:$_"); }
+				else { &display("COLOR:yellow:$_"); }
+			}
+			else { &display("rsync($src, $dst): $_"); }
+			push(@errors, $_); 
+			shift(@errors) if ($#errors > 10);
+			if ($background && !$inbackground)
+                        {
+                                $count++;
+                                # process at least 10 lines before proceeding to background if requested
+                                if ($count >= 1)
+                                {
+                                        &log("Continuuing in background as $$ pid...", $debug);
+                                        close(RSYNC_IPC); close(STDOUT), close(STDIN); close(STDIN);
+                                        push(@LOGPRE, "$$: ");
+                                        $inbackground=1;
+                                }
+                        }
+        	}
+        	close(CMD);
+		$ret = $? >> 8;
+		if ($errorfound || !$successfound)
+        	{
+                	&log("ERRORS FOUND! $file => rsync($src, $dst)\n");
+                	&log($DIV);
+                	map { &log("$_") } @errors;
+                	&log($DIV);
+			print RSYNC_IPC "ret:$ret\n";
+        	}
+		else
+		{
+			&log($DIV, $debug);
+			update_timestamp($FILE, 'refresh') if ($refresh);
+		}
+		close(RSYNC_IPC);
+		&quit($ret) if ($inbackground);
+		exit($ret);
+	}
+	close(RSYNC_IPC);
+
+	my $ret=0;
+	while(<PRSYNC_IPC>)
+	{
+		$ret=$1 if (/^ret:(\d+)/);
+	}
+	close(PRSYNC_IPC);
+	
+	# leave the file locked if its in background, let child process worry about unlock
+	if ($background) { $currently_locked_file=''; }
+	else             { waitpid($bgpid, 0); }
+
+	&quit($ret) if ($ret);
 
 	return(1);
 }
@@ -1906,22 +1971,48 @@ sub process_command
 		foreach my $exec (map { $_->string_value } @execnodes)
 		{
 			&log("Executing '$exec'\n",$debug);
-			&log($DIV, $debug);
-			my $r = system($exec) if (! $dryrun);
-
-			if ($r)
+			
+			my $bgpid;
+			pipe(PCMD_IPC, CMD_IPC);
+			unless($bgpid = fork())
 			{
-				# We don't normally print the command we're executing
-				# for setup commands (see above).  But that makes it
-				# hard to figure out what's going on if it fails.  So
-				# include the command in the message if there was a
-				# failure.
-				my $execmsg = '';
-				$execmsg = "'$exec' " if ($when eq 'setup');
-
-				&away("    Setup/Pre/Post command $execmsg, for $file exited with non-zero value\n");
+				close(PCMD_IPC);
+				my $ret=0;
+				if (!$dryrun)
+				{
+					my $pid = open(CMD, "$exec 2>&1 |");
+					while(<CMD>)
+					{
+						&log("exec: $_");
+					}
+					close(CMD);
+					$ret = $? >> 8;
+				}
+				print CMD_IPC "ret:$ret\n";
+				close(CMD_IPC);
+				exit;
 			}
-			&log($DIV, $debug);
+			close(CMD_IPC);
+			
+			my $ret=0;
+			while(<PCMD_IPC>)
+			{
+				$ret = $1 if (/^ret:(\d+)/);
+			}
+			close(PCMD_IPC);
+			waitpid($bgpid, 0);
+
+			if ($ret)
+                        {
+                        	# We don't normally print the command we're executing
+                                # for setup commands (see above).  But that makes it
+                                # hard to figure out what's going on if it fails.  So
+                                # include the command in the message if there was a
+                                # failure.
+                                my $execmsg = '';
+                                $execmsg = "'$exec' " if ($when eq 'setup');
+                                &away("Setup/Pre/Post command $execmsg, for $file exited with non-zero value: $ret", $ret);
+			}
 		}
 	}
 }
@@ -2110,6 +2201,7 @@ sub octify
 sub lock_file
 {
         my $file = shift || &bug("No lock_file file received");
+	my $alt = shift;
 	#&bug("lock file: $file", 1);
 
         my $lockpath = File::Spec->canonpath("$LOCKBASE/$file.LOCK");
@@ -2155,13 +2247,14 @@ sub lock_file
 sub unlock_currently_locked_file
 {
 	my $signal = shift;
+	my $force = shift;
 
 	# Work around brokenness in XML::Parser
 	return if ($signal && $signal =~ m,XML/Parser/Expat.pm,);
 
 	if ($currently_locked_file)
 	{
-		unlock_file($currently_locked_file);
+		unlock_file($currently_locked_file, $force);
 		$currently_locked_file = '';
 	}
 
@@ -2171,6 +2264,7 @@ sub unlock_currently_locked_file
 sub unlock_file
 {
 	my $file = shift || &bug("No file received");
+	my $force = shift;
 
 	my $lockpath = File::Spec->canonpath("$LOCKBASE/$file.LOCK");
 
@@ -2180,7 +2274,7 @@ sub unlock_file
 		my $pid = <LOCK>;
 		close(LOCK);
 		chomp($pid);
-		if ($pid == $$)
+		if ($pid == $$ || $force)
 		{
 			#&log("Unlocking $file\n", 9);
 			unlink($lockpath) || &away("unable to remove $lockpath: $!");
@@ -2206,11 +2300,14 @@ sub unlock_file
 # checked.  Returns true if any of the source files are newer
 # (indicating that a full generate run should be performed to determine
 # if the file needs to be updated).
+# --
+# if $alt is used, then just return timestamp of alt
 sub check_timestamp
 {
 	my $file = shift || &bug("No file received");
+	my $alt = shift;
 
-	my $stamppath = File::Spec->canonpath("$STAMPBASE/$file.STAMP");
+	my $stamppath = File::Spec->canonpath("$STAMPBASE/$file.STAMP". ($alt?"_$alt":""));
 	my $r = 0;
 
 	# Check to see if a timestamp record exists for this file.  If not
@@ -2223,15 +2320,12 @@ sub check_timestamp
 	{
 		my $st = lstat($stamppath) || &away("unable to stat $stamppath: $!\n");
 		my $stamp = $st->mtime;
-
+		return($stamp) if ($alt);
 		opendir(S, "$SOURCEBASE/$file") || &away("unable to read directory $SOURCEBASE/$file: !$\n");
 		foreach my $entry (readdir(S))
 		{
 			my $st1 = lstat("$SOURCEBASE/$file/$entry") || &away("unable to stat $SOURCEBASE/$file/$entry: $!\n");
-			if ($st1->mtime > $stamp)
-			{
-				$r = 1;
-			}
+			$r = 1 if ($st1->mtime > $stamp);
 		}
 		closedir(S);
 	}
@@ -2242,8 +2336,9 @@ sub check_timestamp
 sub update_timestamp
 {
         my $file = shift || &bug("No update_timestamp file received");
+	my $alt = shift;
 
-        my $stamppath = File::Spec->canonpath("$STAMPBASE/$file.STAMP");
+        my $stamppath = File::Spec->canonpath("$STAMPBASE/$file.STAMP". ($alt?"_$alt":""));
 
         # Make sure the directory tree for this file exists in the
         # timestamp directory
@@ -2254,6 +2349,21 @@ sub update_timestamp
         close(TS);
         CORE::chmod(0777, $stamppath);
 }
+
+sub check_process($)
+{
+        my ($name) = @_;
+
+        my @found;
+	my $regex = qr/^(\S+)\s+(\d+).*$name/;
+        foreach my $line ( split("\n", `$PS -auxwww 2>/dev/null`) )
+        {
+                next if ($line !~ $regex);
+                push(@found, $2);
+        }
+        return @found;
+}
+
 
 # Loads external hooks  
 sub loadhooks()
@@ -2323,6 +2433,9 @@ sub findsystem
                 	$LINUXDISTRO = 'slackware';
         	}
 	}
+
+	our $PS='ps';
+        $PS='/usr/ucb/ps' if ($OS =~ /sunos/);
 
 	#
 	# Load the hosts file
@@ -2501,11 +2614,14 @@ sub parsecommandline()
 		'push=s' => \$etchpush,
 		'ack=i' => \$ACK,
 		'no-color|no_color|nocolor|ansi_colors_disabled' => \$nocolor,
-		'duty=s' => sub { @MANUALDUTIES = grep {$_} split(/,|\s+/, $_[1]); push(@OPTIONS, "--duty='$_[1]'"); },
-		'withduty|with-duty=s' => sub { @DUTIES = split(/,|\s+/, $_[1]); push(@OPTIONS, "--withduty='$_[1]'"); },
+		'module|duty=s' => sub { @MANUALDUTIES = grep {$_} split(/,|\s+/, $_[1]); push(@OPTIONS, "--duty='$_[1]'"); },
+		'withmodule|withduty|with-duty=s' => sub { @DUTIES = split(/,|\s+/, $_[1]); push(@OPTIONS, "--withduty='$_[1]'"); },
 		'source=s' => sub { @SOURCES = grep {$_} split(',', $_[1]); push(@OPTIONS, "--source='$_[1]'"); },
 		'config=s' => sub { $CONFIGBASE=$_[1]; push(@OPTIONS, "--config='$_[1]'"); },
 		);
+
+	# Set etch options as env
+	$ENV{'ETCH_OPTIONS'} = join(' ', @OPTIONS);
 
 	# set default sources
 	push(@SOURCES, "$CONFIGBASE/source") if (!@SOURCES);
@@ -2538,19 +2654,23 @@ sub parsecommandline()
         # set global settings
         our $VARBASE = $defaults_xpath->getNodeText('/config/VARBASE') || "$ETCH_PREFIX/var";
         &away("VARBASE is not set in $CONFIGBASE/defaults.xml\n") if (!$VARBASE);
+	$ENV{'ETCH_VARBASE'} = $VARBASE;
         our $ORIGBASE =  "$VARBASE/orig";
+	$ENV{'ETCH_ORIGBASE'} = $ORIGBASE;
         our $LOCKBASE =  "$VARBASE/locks";
+	$ENV{'ETCH_LOCKBASE'} = $LOCKBASE;
         our $STAMPBASE = "$VARBASE/timestamps";
+	$ENV{'ETCH_STAMPBASE'} = $STAMPBASE;
 
 	# Overwrite $TMPBASE use
         # Preheat $TMPBASE
-	our $PS = $$;
-	$PS = $runas if ($runas);	
+	our $RUNAS = $$;
+	$RUNAS = $runas if ($runas);	
 	# File that is used to keep track of which files have been worked on and interaction between kids
 	umask 0;
 	our $IPC_namespace = "${VARBASE}/tmp/etch_${PS}";
         system('rm -rf '. $IPC_namespace .' >/dev/null 2>/dev/null') if (!$runas && -d $IPC_namespace);
-        our $IPC = new Cache::FileCache({ 'namespace' => 'etch_'.$PS, 'default_expires_in' => 1800, 'cache_root' => "${VARBASE}/tmp/" });
+        our $IPC = new Cache::FileCache({ 'namespace' => 'etch_'.$RUNAS, 'default_expires_in' => 1800, 'cache_root' => "${VARBASE}/tmp/" });
 
 	# Display a usage message if GetOptions() reported an error or if the
 	# user did not specify a valid action to perform.
@@ -2763,7 +2883,7 @@ sub ipc_etchpush($$$)
 	my ($file, $msg, $mode) = @_;
 	
 	my $id = int rand(999999);
-	print "<etchpush id='$id' mode='$mode' ps='$PS' file='$file'>$msg</etchpush>\n";
+	print "<etchpush id='$id' mode='$mode' ps='$RUNAS' file='$file'>$msg</etchpush>\n";
 
 	# wait 30 seconds for reply, if not replied by then, exit
 	sleep(3);
@@ -2859,10 +2979,10 @@ sub usage
         my $help =      "\t--generate-all|-g      Can be used instead of giving a specific path\n". 
 			"\t                         to generate. This option or path is REQUIRED.\n".
 			"\t--list                 Lists matched configuration files.  Similar to dry-run.\n".
-			"\t--module=NAME1,NAME2   Only work on files tied to this module(s). Multiple\n".
-			"\t                         values can be specified with comma delimiter.\n".
-			"\t--withmodule=NAME1,NAME2 Additional modules can be assigned at run time. Multiple\n".
-			"\t                          values are comma delimited.\n".
+			"\t--duty=NAME1,NAME2     Only work on files tied to this duty/module(s).\n".
+			"\t                         Multiple values can be specified with comma delimiter.\n".
+			"\t--withduty=NAME1,NAME2 Additional duties/modules can be assigned at run time.\n".
+			"\t                          Multiple values are comma delimited.\n".
                         "\t--debug|-d|dd=#        Print lots of messages about what etch is doing\n".
                         "\t                         1 : Simple output information\n".
                         "\t                         5 : Show rsync information\n".
@@ -3104,7 +3224,7 @@ sub quit
 {
 	my $exit = shift || 0;
         # cleanup afterself
-        &unlock_currently_locked_file();
+        &unlock_currently_locked_file('', 1);
 	if (defined $IPC)
 	{
 		if ($ACK)
@@ -3116,7 +3236,7 @@ sub quit
 			system('rm -rf '. $IPC_namespace .' >/dev/null 2>/dev/null') if (-d $IPC_namespace);
 		}
 	}
-	&unlock_currently_locked_file();
+	&unlock_currently_locked_file('', 1);
 
 	&display(localtime(time) .": Done\n");
 	&display($DIV);
