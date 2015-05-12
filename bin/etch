@@ -2276,15 +2276,13 @@ sub unlock_file
 		chomp($pid);
 		if ($pid == $$ || $force)
 		{
-			#&log("Unlocking $file\n", 9);
 			unlink($lockpath) || &away("unable to remove $lockpath: $!");
 		}
 		else
 		{
 			# This shouldn't happen, if it does it's a bug
-		        &log("Asked to unlock $file which is locked by another process\n");
-        		eval {no warnings; print IPC "ERROR\n"; close(IPC); };
-        		exit(1);
+		        &log("WARNING: Asked to unlock $file which is locked by another process\n");
+			unlink($lockpath) || &away("unable to remove $lockpath: $!");		
 		}
 	}
 	else
