@@ -2378,7 +2378,7 @@ sub loadhooks()
 
 sub initsystem()
 {
-        our $LOG = $defaults_xpath->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs";
+        our $LOG = $defaults_xpath->getNodeText('/config/LOG') || "$VARBASE/logs";
         warn "LOG not configured in defaults, not logging.\n" if (!$LOG);
         our $LOGDAYS=$defaults_xpath->getNodeText('/config/LOGDAYS') || 30;
         $LOGDAYS = int($LOGDAYS);
