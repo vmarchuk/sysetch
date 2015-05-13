@@ -964,7 +964,8 @@ sub generate_directory($$$$)
 
         # If the filtering has removed the directive to create this
         # directory, that means it doesn't apply to this host.
-	if ( ! &ismine('/config/directory/create', $xpath) && ! &ismine('/config/directory/script', $xpath) && ! &ismine('/config/directory/rsync', $xpath) )
+	my $rsync_run=&ismine('/config/directory/rsync', $xpath);
+	if ( ! &ismine('/config/directory/create', $xpath) && ! &ismine('/config/directory/script', $xpath) && !$rsync_run )
         {
         	&log("\tNo directive to create $file directory, doing nothing\n", 7) if ($dryrun != 9);
 		return(0);
@@ -993,9 +994,6 @@ sub generate_directory($$$$)
         # if $script returns true, then script modified something
         my $script = &process_script('directory', $file, $xpath);
 
-        # The user can specify an rsync from where to copy
-        my $rsync = &process_rsync('directory', $file, $xpath, $dryrun);
-
         # Proceed if:
         # - The current file is not a directory
         # - The permissions or ownership requested don't match the
@@ -1004,7 +1002,7 @@ sub generate_directory($$$$)
         	! -d $file ||
                 compare_permissions($file, $perms) ||
                 compare_ownership($file, $uid, $gid) || 
-                $script || $rsync )
+                $script || $rsync_run )
         {
         	&log("\tno change necessary\n", $debug);
 		return(1);
@@ -1013,8 +1011,12 @@ sub generate_directory($$$$)
         # Perform any pre-action commands that the user has requested
         &process_pre($file, $xpath, $dryrun);
 
-        # Save the original file
+        # Save the original dir, disabled for directories
+	# @TODO: allow this on flag option
         copy_original($file, 0, $dryrun);
+
+	# The user can specify an rsync from where to copy
+        my $rsync = &process_rsync('directory', $file, $xpath, $dryrun);
 
         # Create the directory
         if (! -d $file)
