@@ -2765,7 +2765,7 @@ sub etchpush
 		}
 	}
 
-        our $LOG = $cfg->getNodeText('/config/LOG') || "$ETCH_PREFIX/var/logs";
+        our $LOG = $cfg->getNodeText('/config/LOG') || "$VARBASE/logs";
         warn "LOG not configured in defaults, not logging.\n" if (!$LOG);
         our $LOGDAYS=$cfg->getNodeText('/config/LOGDAYS') || 30;
         $LOGDAYS = int($LOGDAYS);
