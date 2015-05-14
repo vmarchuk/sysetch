@@ -1886,11 +1886,13 @@ sub process_rsync($$)
 	unless($bgpid = fork())
 	{	
 		close(PRSYNC_IPC);
+		if ($background) { close($_) for (STDOUT, STDIN, STDERR); }
+		
 		my ($ret, $errorfound, $successfound) = (0,0,0);
 		&log($DIV, $debug);
 		my $count=0;
 		my $inbackground=0;
-		my $pid = open(CMD, "$cmd 2>&1 |");
+		open CMD, '-|' or exec split(' ', $cmd);
         	while(<CMD>)
         	{
 			next if (/^\s/);
@@ -1915,8 +1917,9 @@ sub process_rsync($$)
                                 # process at least 10 lines before proceeding to background if requested
                                 if ($count >= 1)
                                 {
-                                        &log("Continuuing in background as $$ pid...", $debug);
-                                        close(RSYNC_IPC); close(STDOUT), close(STDIN); close(STDIN);
+					print RSYNC_IPC "Continuuing in background as $$ pid...\n";
+					print RSYNC_IPC "\nret:$ret\n";
+					close(RSYNC_IPC);
                                         push(@LOGPRE, "$$: ");
                                         $inbackground=1;
                                 }
@@ -1946,9 +1949,11 @@ sub process_rsync($$)
 	my $ret=0;
 	while(<PRSYNC_IPC>)
 	{
-		$ret=$1 if (/^ret:(\d+)/);
+		if (/^ret:(\d+)/) { $ret=$1; }
+		else { &display($_); }
 	}
 	close(PRSYNC_IPC);
+
 	
 	# leave the file locked if its in background, let child process worry about unlock
 	if ($background) { $currently_locked_file=''; }
