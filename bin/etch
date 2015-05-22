@@ -36,7 +36,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.0';
+$VERSION='1.1.0.1';
 
 # Make sure all perl modules exist before using
 
@@ -1358,6 +1358,48 @@ sub check_attributes
 		}
 	}
 }
+
+# process refresh argument
+# returns true or false
+# if refresh is present and matched, true
+# if refresh is present and not matched, false
+# no refresh: true
+sub isrefresh
+{
+	my $dst = shift || &bug("No dst received");
+	my $file = shift || &bug("No file received");
+	my $xpath = shift || &bug("No xpath received");
+	my $update = shift;
+
+	my $ret=1;
+
+	if (my @nodes = $xpath->findnodes($dst))
+	{
+		my $refresh = $nodes[0]->getAttribute('refresh');
+		if ($refresh)
+		{
+			my $str = "refresh". $dst;
+			$str =~ s/\//_/g;
+			if ($update)
+			{
+				update_timestamp($file, $str) if (!$dryrun);
+			}
+			else
+			{
+				my $ts=time();
+        			my $ets = &check_timestamp($FILE, $str);
+        			my $expired = $ts - $ets;
+        			if ($expired < $refresh)
+        			{
+                			&log("Not processing 'refresh mode' for $dst because it's not yet expired, ". ($refresh - $expired) ." second(s) left.", 4);
+					$ret=0;
+        			}
+			}
+		}	
+	}
+	return($ret)
+}
+
 # used in similar fashion as check_attributes, except this is to be called from generate_ functions
 # came from MANUALDUTIES req
 # arg: (string)dst $xpath
@@ -1772,7 +1814,7 @@ sub process_rsync($$)
 		}
 	}
 
-	my ($dst, $altdst, $command, $options, $exclude, $excludefrom, $background, $refresh);
+	my ($dst, $altdst, $command, $options, $exclude, $excludefrom, $background);
 	my $manual = 0;
 	foreach my $attribute ($node->getAttributes())
 	{
@@ -1784,26 +1826,12 @@ sub process_rsync($$)
 		elsif ($key eq 'dest')    { $altdst = $dst = $val;    }
 		elsif ($key eq 'manual')  { $manual = $val; }
 		elsif ($key eq 'background') { $background=1 if ($val eq 'true'); }
-		elsif ($key eq 'refresh')   { $refresh = $val; }
 	}
 
 	if ($manual && ! grep { /^$file/ } @manualfilesOriginal )
 	{
 		&log("Manual attribute set, not processing rsync because its not invoked manually.", 4);
 		return(0);
-	}
-
-	# If using 'refresh' mode then only proceed if timestamp has expired the value of $refresh
-	if ($refresh)
-	{
-		my $ts = time();
-		my $ets = &check_timestamp($FILE, 'refresh');
-		my $expired = $ts - $ets;
-		if ($expired < $refresh)
-		{
-			&log("Not processing 'refresh mode' rsync because its not yet expired, ". ($refresh - $expired) ." second(s) left.", 4);
-			return(0);
-		}
 	}
 
 	$dst = $file if (!$dst);
@@ -1872,7 +1900,9 @@ sub process_rsync($$)
 	}
 
 	my $cmd = "$command $options $src $dst";
-	&log("RSYNC: $cmd\n", $debug);
+	&log("Processing RSYNC: $cmd\n", $debug);
+
+	return(0) if (! &isrefresh("/config/$when/rsync", $FILE, $xpath));
 
 	if ( my @pids = &check_process("rsync.*$src $dst 2>&1") )
 	{
@@ -1938,7 +1968,7 @@ sub process_rsync($$)
 		else
 		{
 			&log($DIV, $debug);
-			update_timestamp($FILE, 'refresh') if ($refresh);
+			&isrefresh("/config/$when/rsync", $FILE, $xpath, 1);
 		}
 		close(RSYNC_IPC);
 		&quit($ret) if ($inbackground);
@@ -1971,57 +2001,63 @@ sub process_command
 	my $xpath = shift || &bug("No xpath received");
 	my $dryrun = shift;  # Can be false
 
-	if ($xpath->exists("/config/$when/exec"))
+	my $ret=0;
+
+	my $str;
+	if   ($xpath->exists("/config/$when/exec")) { $str="/config/$when/exec"; }
+	elsif ($xpath->exists("/config/$when/command")) { $str="/config/$when/command"; }
+	return($ret) if (!$str);
+
+	my @nodes = $xpath->findnodes($str);
+	my $exec = $nodes[0]->string_value;
+	&log("Executing '$exec'\n",$debug);
+	return(0) if (! &isrefresh($str, $file, $xpath));
+		
+	my $bgpid;
+	pipe(PCMD_IPC, CMD_IPC);
+	unless($bgpid = fork())
 	{
-		my @execnodes = $xpath->findnodes("/config/$when/exec");
-
-		foreach my $exec (map { $_->string_value } @execnodes)
+		close(PCMD_IPC);
+		my $ret=0;
+		if (!$dryrun)
 		{
-			&log("Executing '$exec'\n",$debug);
-			
-			my $bgpid;
-			pipe(PCMD_IPC, CMD_IPC);
-			unless($bgpid = fork())
+			my $pid = open(CMD, "$exec 2>&1 |");
+			while(<CMD>)
 			{
-				close(PCMD_IPC);
-				my $ret=0;
-				if (!$dryrun)
-				{
-					my $pid = open(CMD, "$exec 2>&1 |");
-					while(<CMD>)
-					{
-						&log("exec: $_");
-					}
-					close(CMD);
-					$ret = $? >> 8;
-				}
-				print CMD_IPC "ret:$ret\n";
-				close(CMD_IPC);
-				exit;
+				&log("exec: $_");
 			}
-			close(CMD_IPC);
-			
-			my $ret=0;
-			while(<PCMD_IPC>)
-			{
-				$ret = $1 if (/^ret:(\d+)/);
-			}
-			close(PCMD_IPC);
-			waitpid($bgpid, 0);
-
-			if ($ret)
-                        {
-                        	# We don't normally print the command we're executing
-                                # for setup commands (see above).  But that makes it
-                                # hard to figure out what's going on if it fails.  So
-                                # include the command in the message if there was a
-                                # failure.
-                                my $execmsg = '';
-                                $execmsg = "'$exec' " if ($when eq 'setup');
-                                &away("Setup/Pre/Post command $execmsg, for $file exited with non-zero value: $ret", $ret);
-			}
+			close(CMD);
+			$ret = $? >> 8;
 		}
+		print CMD_IPC "ret:$ret\n";
+		close(CMD_IPC);
+		exit;
 	}
+	close(CMD_IPC);
+	
+	my $r=0;
+	while(<PCMD_IPC>)
+	{
+		$r = $1 if (/^ret:(\d+)/);
+	}
+	close(PCMD_IPC);
+	waitpid($bgpid, 0);
+
+	if ($r)
+        {
+		$ret=0;
+               	# We don't normally print the command we're executing
+                # for setup commands (see above).  But that makes it
+                # hard to figure out what's going on if it fails.  So
+                # include the command in the message if there was a
+                # failure.
+                my $execmsg = '';
+                $execmsg = "'$exec' " if ($when eq 'setup');
+                &away("Setup/Pre/Post command $execmsg, for $file exited with non-zero value: $ret", $r);
+	}
+	$ret=1;
+	&isrefresh($str, $file, $xpath, 1);
+	return($ret);
 }
 
 sub process_depend

@@ -1,3 +1,6 @@
+# 1.1.0.1
+refresh: 
+ - Expanded 'refresh' option to command to allow for at jobs
 # 1.1
 rsync:
  - added 'background' option to allow rsync to continue in background
