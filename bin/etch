@@ -1391,7 +1391,7 @@ sub isrefresh
         			my $expired = $ts - $ets;
         			if ($expired < $refresh)
         			{
-                			&log("Not processing 'refresh mode' for $dst because it's not yet expired, ". ($refresh - $expired) ." second(s) left.", 4);
+                			&log(" Not processing 'refresh mode' for $dst because it's not yet expired, ". ($refresh - $expired) ." second(s) left.");
 					$ret=0;
         			}
 			}
