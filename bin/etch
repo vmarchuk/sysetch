@@ -3,7 +3,6 @@
 
 function pathcanonicalsimple()
 {
-        # http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
         local dst="${1}"
         cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
 }
@@ -12,7 +11,8 @@ function pathcanonical()
         local dst="$(pathcanonicalsimple "${1}")"
 
         while [[ -h "${dst}" ]]; do
-                local linkDst="$(ls -l "${dst}" | sed -r -e 's/^.*[[:space:]]*->[[:space:]]*(.*)[[:space:]]*$/\1/g')"
+                #local linkDst="$(ls -l "${dst}" | sed -r -e 's/^.*[[:space:]]*->[[:space:]]*(.*)[[:space:]]*$/\1/g')"
+		local linkDst="$(ls -l "${dst}" | sed -e 's/^.*[[:space:]]*->[[:space:]]*\(.*\)/\1/')"
                 if [[ -z "$(echo "${linkDst}" | grep -E '^/')" ]]; then
                         # relative link destination
                         linkDst="$(dirname "${dst}")/${linkDst}"
