@@ -24,10 +24,11 @@ function pathcanonical()
 
 etch=$(pathcanonical $0)
 prefix=$(dirname $(dirname $etch))
-env="$prefix/etc/etch/env"
+env="$prefix/etc/env"
 [ -f $env ] && source $env
+ARCH="$(uname -sp|tr ' [:upper:]' '_[:lower:]')"
 [ -n "$PERL" ] || PERL=/usr/bin/perl
-[ -x $PERL ] && ETCH="$etch" ETCH_PREFIX="$prefix" ETCH_BASE=$(basename $0) PERLLIB=$prefix/lib/perl exec $PERL -x $etch $*
+[ -x $PERL ] && ETCH="$etch" ETCH_PREFIX="$prefix" ETCH_BASE=$(basename $0) PERLLIB=$PERLLIB:$prefix/lib/perl/$ARCH:$prefix/lib/perl/share exec $PERL -x $etch $*
 
 echo "ERROR: Unable to find perl binary!"
 exit 5
@@ -37,9 +38,6 @@ exit 5
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
 $VERSION='1.1.0.1';
-
-# Make sure all perl modules exist before using
-
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -160,7 +158,7 @@ sub generateall($$$)
 
                 	if ($disabled)                                                                                           
                 	{                                                                                                        
-                        	our @CONFIGPATHDISABLED if (!defined @CONFIGPATHDISABLED);                                       
+                        	our @CONFIGPATHDISABLED if (!@CONFIGPATHDISABLED);                                       
                         	push(@CONFIGPATHDISABLED, $thisfile);                                                            
                 	}                                                                                                        
                                                                                                                          
@@ -1219,7 +1217,7 @@ sub perminfo($$)
         our $group = $group || $SYSTEMGROUP;
 	
 	# %perminfo holds permission history
-	our %perminfo if (!defined %perminfo);
+	our %perminfo if (! %perminfo);
 	my $f;
 	my @path = map { $f .= "$_/"; } split(/\//, $file);
 	for (my $i=$#path; $i > 0; $i--)
@@ -2122,7 +2120,7 @@ sub lookup_uid
         sub getpwnamC
         {
 		my $o = shift;
-                our %getpwnamC if (!defined %getpwnamC);
+                our %getpwnamC if (! %getpwnamC);
                 return $getpwnamC{$o} if (exists $getpwnamC{$o});
 
 		my $i = getpwnam($o);
@@ -2159,7 +2157,7 @@ sub lookup_gid
 	sub getgrnamC
 	{
 		my $g = shift;
-		our %getgrnamC if (!defined %getgrnamC);
+		our %getgrnamC if (! %getgrnamC);
 		return $getgrnamC{$g} if (exists $getgrnamC{$g});
 
 		my $i = getgrnam($g);
