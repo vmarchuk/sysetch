@@ -1,15 +1,15 @@
 #!/bin/bash
 # -*- mode: Perl -*-
 
-function path-canonical-simple()
+function pathcanonicalsimple()
 {
         # http://blog.publicobject.com/2006/06/canonical-path-of-file-in-bash.html
         local dst="${1}"
         cd -P -- "$(dirname -- "${dst}")" &> /dev/null && echo "$(pwd -P)/$(basename -- "${dst}")"
 }
-function path-canonical()
+function pathcanonical()
 {
-        local dst="$(path-canonical-simple "${1}")"
+        local dst="$(pathcanonicalsimple "${1}")"
 
         while [[ -h "${dst}" ]]; do
                 local linkDst="$(ls -l "${dst}" | sed -r -e 's/^.*[[:space:]]*->[[:space:]]*(.*)[[:space:]]*$/\1/g')"
@@ -17,12 +17,12 @@ function path-canonical()
                         # relative link destination
                         linkDst="$(dirname "${dst}")/${linkDst}"
                 fi
-                dst="$(path-canonical-simple "${linkDst}")"
+                dst="$(pathcanonicalsimple "${linkDst}")"
         done
         echo "${dst}"
 }
 
-etch=$(path-canonical $0)
+etch=$(pathcanonical $0)
 prefix=$(dirname $(dirname $etch))
 env="$prefix/etc/etch/env"
 [ -f $env ] && source $env
