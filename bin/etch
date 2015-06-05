@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.0.1';
+$VERSION='1.1.0.2';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -335,6 +335,12 @@ sub generate
 			{
 				our $PROCESS_rsync = { process => 1, xpath => $xpath, parent => $file };
 				&log("PROCESS $file (rsync config found)\n", 7);
+			}
+			elsif ($xpath->exists("/config/directory/create"))
+			{
+				# dont include this dir in rsync process
+				our $PROCESS_rsync = undef;
+				&log("PROCESS $file (dir config found)\n", 7);
 			}
 			else { &log("PROCESS $file\n", 7); }
 			next;
@@ -963,6 +969,7 @@ sub generate_directory($$$$)
         # If the filtering has removed the directive to create this
         # directory, that means it doesn't apply to this host.
 	my $rsync_run=&ismine('/config/directory/rsync', $xpath);
+	$rsync_run = &isrefresh("/config/directory/rsync", $FILE, $xpath) if ($rsync_run);
 	if ( ! &ismine('/config/directory/create', $xpath) && ! &ismine('/config/directory/script', $xpath) && !$rsync_run )
         {
         	&log("\tNo directive to create $file directory, doing nothing\n", 7) if ($dryrun != 9);
