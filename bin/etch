@@ -2668,6 +2668,7 @@ sub parsecommandline()
 
 	# Set etch options as env
 	$ENV{'ETCH_OPTIONS'} = join(' ', @OPTIONS);
+	$ENV{'ETCH_ARG'}=join(' ', @origARGV);
 
 	# set default sources
 	push(@SOURCES, "$CONFIGBASE/source") if (!@SOURCES);
