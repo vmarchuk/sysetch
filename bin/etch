@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.0.2';
+$VERSION='1.1.0.3';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -908,7 +908,7 @@ sub generate_link($$$)
 
         # Proceed if:
         # - The new link destination differs from the current one
-        unless (compare_link_destination($file, $dest))
+	unless ( compare_link_destination($file, $dest) || compare_ownership($file, $uid, $gid) )
         {
 	        &log("\tno change necessary\n", $debug);
 		return(1);
@@ -1167,7 +1167,7 @@ sub chown($$$$)
                 {
 			if (-l $f)
 			{
-                        	system( ("/usr/bin/chown", "-h", "$uid:$gid", "$f") ) ;
+                        	system( ("chown", "-h", "$uid:$gid", "$f") ) ;
 				if ( $? != 0 ) { &away("Unable to chown $f to $uid:$gid");}
 			}
 			else
@@ -2220,7 +2220,7 @@ sub compare_ownership
 	my $gid = shift;  # Can be zero
 	&bug("No gid received") if (! defined $gid);
 
-	return if (! -e $file);
+	return if (! -e $file && ! -l $file );
 
 	my $st = lstat($file) || &away("unable to stat $file: $!");
 	if ($st->uid == $uid && $st->gid == $gid) { return 0; }
