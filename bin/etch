@@ -1020,11 +1020,8 @@ sub generate_directory($$$$)
 	# @TODO: allow this on flag option
         copy_original($file, 0, $dryrun);
 
-	# The user can specify an rsync from where to copy
-        my $rsync = &process_rsync('directory', $file, $xpath, $dryrun);
-
         # Create the directory
-        if (! -d $file)
+        if (! -d $file || -l $file)
         {
         	&display("Making directory $file\n");
                 if (!$dryrun)
@@ -1033,6 +1030,9 @@ sub generate_directory($$$$)
                         mkdir($file);
                 }
         }
+
+	# The user can specify an rsync from where to copy
+        my $rsync = &process_rsync('directory', $file, $xpath, $dryrun);
 
         # Ensure the permissions are set properly
         &chmod($perms, $file, $debug);
