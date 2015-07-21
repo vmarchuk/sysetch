@@ -1,3 +1,6 @@
+# 1.1.1.0
+Support for overriding lock logic
+- Introduced <lock> block to change locktime as well as wait behavior 
 # 1.1.0.1
 refresh: 
  - Expanded 'refresh' option to command to allow for at jobs

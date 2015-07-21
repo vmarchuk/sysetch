@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.0.3';
+$VERSION='1.1.1.0';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -363,8 +363,8 @@ sub generate
 
 		if (!$test && $dryrun != 9)
 		{
-			# lock file
-        		&lock_file($file);
+			# lock file, if returns false then leave the file
+        		next if (! &lock_file($file, $xpath) );
         		$currently_locked_file = $file;
 			
         		# If we're in timestamp mode just check the file timestamps first to
@@ -2249,7 +2249,7 @@ sub octify
 sub lock_file
 {
         my $file = shift || &bug("No lock_file file received");
-	my $alt = shift;
+	my $xpath = shift;
 	#&bug("lock file: $file", 1);
 
         my $lockpath = File::Spec->canonpath("$LOCKBASE/$file.LOCK");
@@ -2258,21 +2258,47 @@ sub lock_file
         # lock directory
         &makepath($lockpath, 0, "0777");
 
-	# force through stale lock files older than 3 minutes
-        if (-f $lockpath)
+	# lock logic an be overriden in config
+        my ($wait, $timeout, $locklogic) = (1, 180, 0);
+        if ($xpath)
         {
-                my $st = lstat($lockpath);
-                if ( time - 180 > $st->mtime )
-                {
-                        &log("Found stale lock for $file, continuing...\n");
-                        unlink($lockpath);
+                foreach my $l ($xpath->findnodes("/config/lock"))
+		{
+                        $timeout = $l->string_value;
+                        $wait = 0 if ($l->getAttribute('wait') eq 'false');
+			$locklogic=1;
                 }
         }
 
-        # Make 3 minute worth of attempts (1s sleep after each attempt)
-        for (my $count=179; $count>0; $count--)
+	my $ts = time;
+	my $expires=0;
+	if (-f $lockpath)
+	{
+		my $st = lstat($lockpath);
+		my $locktime = $st->mtime;
+		$expires = $locktime + $timeout;
+		open(f, $lockpath);
+                my $pid = <f>; chomp($pid);
+                close(f);
+		
+		&log("LOCK: $file found pid:$pid, created:". localtime($locktime) .", expires: ". localtime($expires)  ."\n");
+		&log("LOCK: wait:$wait, timeout:$timeout\n");
+	}
+
+        # Make 3($timeout) minute worth of attempts (1s sleep after each attempt)
+        for (my $count=$timeout; $count>0; $count--)
         {
-                unlink($lockpath) if ($force);
+		if ($force)
+		{
+			&log("LOCK: forced, continuing...\n");
+			unlink($lockpath);
+		}
+		elsif (-f $lockpath && $ts >= $expires)
+		{
+			&log("LOCK: expired, continuing...\n");
+			unlink($lockpath);
+		}
+		
                 my $r = sysopen(LOCK, $lockpath, O_WRONLY|O_CREAT|O_EXCL);
                 if ($r)
                 {
@@ -2280,16 +2306,20 @@ sub lock_file
                         print LOCK $$, "\n";
                         close(LOCK);
                         &chmod('0777', $lockpath, 9);
-                        return;
+                        return(1);
                 }
-                else
-                {
-                        &log("Attempt to acquire lock for $file failed ($lockpath), retrying for $count sec\n");
-                        sleep 1;
-                }
+		elsif ( !$wait )
+		{
+			&log("LOCK: Not attempting to wait for $file to expire ($lockpath) as requested.\n");
+			return(0);
+		}
+                &log("LOCK: Attempt to acquire for $file failed ($lockpath), retrying for $count sec.\n");
+                sleep 1;
+		$ts++;
         }
-
-        &log("Unable to acquire lock for $file after repeated attempts, continuing...\n");
+	
+        &log("LOCK: Unable to acquire for $file after repeated attempts, continuing...\n");
+	return(1);
 }
 
 sub unlock_currently_locked_file
