@@ -3215,7 +3215,7 @@ sub loginit()
 	my $now = time;
 	my @t = localtime($now);
 	our $LOGFILE = "$LOG/etch-". sprintf('%4d%02d%02d%02d%02d%02d', $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
-	&makepath($LOGFILE, 0, '0755');
+	&makepath($LOGFILE, 0, '0777');
 
 	@t = localtime($now - $LOGDAYS * 86400);
 	my $expire = sprintf('%4d%02d%02d000000', $t[5]+1900, $t[4]+1, $t[3]);
