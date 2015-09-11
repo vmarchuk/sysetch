@@ -1,0 +1,18 @@
+# if logic, if arg1(duty) is matched then display arg2(output)
+# Support negation
+# Support regex
+($val, $output) = @ARGS;
+
+$duty = $val;
+$duty =~ s/^!//;
+
+if ($val =~ /^!/)
+{
+        print "NEGATION: $duty";
+        # negation
+        print CONFIG $output if (!grep { /^$duty$/ } @DUTIES );
+}
+else
+{
+        print CONFIG $output if ( grep { /^$duty$/ } @DUTIES );
+}
