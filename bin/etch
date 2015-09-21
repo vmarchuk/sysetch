@@ -918,7 +918,6 @@ sub generate_link($$$)
         {
         	# Check for force, force will wipe up directory if it exists
                 &away("Original of $file is a directory\n") if (! $xpath->exists('/config/link/force') );
-                &remove_file($file);
         }
 
         # Perform any pre-action commands that the user has requested
@@ -928,7 +927,7 @@ sub generate_link($$$)
         &copy_original($file, 1, $dryrun);
 
         # Create the link
-        &symlink($dest, $file);
+        &symlink($dest, $file, $dryrun);
 
         # Ensure the ownership is set properly
         &chown($uid, $gid, $file, $debug) if (!$dryrun);
@@ -1105,7 +1104,7 @@ sub generate_delete($$$$)
 # Create symlink
 sub symlink($$)
 {
-	my ($file, $dest) = @_;
+	my ($file, $dest, $dryrun) = @_;
 	&bug("Incorrect params") if (! defined $file || ! defined $dest);
         if ( compare_link_destination($dest, $file) )
         {
