@@ -1,0 +1,5 @@
+# template script to display environment variable, alternative to exec(echo $variable) as it doesnt need to start shell process
+#
+# because etch splits args by ',', we need to put it back otherwise it breaks args with commas
+$exec = join(',', @ARGS);
+print CONFIG $env{$exec};
