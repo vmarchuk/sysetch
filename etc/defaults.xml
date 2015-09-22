@@ -19,6 +19,7 @@
 	<rsync>
 		<command>rsync</command>
 		<options>-aiO --delete --exclude=.git --exclude=.svn --exclude='*.swp'</options>
+		<healthcheck></healthcheck>
 	</rsync>
 	<forbiddenhosts>
 		<host>test3</host>

@@ -37,10 +37,10 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.1.3';
+$VERSION='1.1.2.0';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
-our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
+our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '@HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
 
 #################################################
 # no user defined variables below
@@ -1779,6 +1779,35 @@ sub process_script
 	return($newcontents);
 }
 
+# returns 0 if working
+# returns 1 if not
+sub process_rsync_healthcheck($)
+{
+	my $uri = shift || &bug("No rsync uri provided for verification");
+	my $command = $defaults_xpath->getNodeText("/config/rsync/command");
+	my $options = $defaults_xpath->getNodeText("/config/rsync/options");
+
+	my $cmd = "$command $options --timeout=10 --dry-run $uri";
+	&log("Processing RSYNC healthcheck $uri\n", $debug);	
+	&log($cmd, 7);
+	open CMD, '-|' or exec split(' ', $cmd);
+	my $errorfound=0;
+	while(<CMD>)
+	{
+		next if (/^\s/);
+		$errorfound=1 if (/rsync error:/);
+		&log($_, 7) if ($debug > 7);
+	}
+	close(CMD);
+	my $ret = $? >> 8;
+	if ($errorfound || $ret != 0)
+	{
+		&display("COLOR:red:WARNING: Healthecheck failed for $uri!\n");
+		return(1);
+	}
+	return(0);
+}
+
 sub process_rsync($$)
 {
         my $when = shift || &bug("No setup/pre/post received");
@@ -1794,15 +1823,43 @@ sub process_rsync($$)
 	return(0) if (! $node);
 	my $string = $node->string_value;	
 
+	# Set $RSYNC_SRC from duty settings if empty
+	# Run status check on src if 
+	my $rsync_src=$RSYNC_SRC;
+	my $hc = $node->getAttribute('healthcheck') || '';
+	if (! $rsync_src || $hc)
+	{
+		$hc = $defaults_xpath->getNodeText("/config/rsync/healthcheck") if (!$hc);
+		srand;	
+		foreach my $i ( sort { int(rand(3))-1 } @DUTIES )	
+		{
+			next if ($i !~ /^rsync_src_(.*)/);
+			my $h = $1;
+			if ($hc) 
+			{
+				if (&process_rsync_healthcheck($h.$hc) == 0)
+				{
+					$rsync_src = $h;
+					last;
+				}
+			}
+			else 
+			{
+				$rsync_src = $h;
+				last;
+			}
+		}
+	}
+
 	# eval $src just in case we want to use a variable
 	# Use autogen depot if rsync src is empty
 	my $src = eval "\"$string\"";
-	$src = $RSYNC_SRC . $src if ($src =~ /^:/ && $RSYNC_SRC);
+	$src = $rsync_src . $src if ($src =~ /^:/ && $rsync_src);
 	if (!$src)
 	{
-		if ($RSYNC_SRC)
+		if ($rsync_src)
 		{	
-			$src = "${RSYNC_SRC}::";
+			$src = "${rsync_src}::";
 			if ($options && exists $options->{process} && exists $options->{parent})
 			{
 				$src .= basename($options->{parent});
@@ -2444,13 +2501,13 @@ sub check_process($)
 # Loads external hooks  
 sub loadhooks()
 {
-	our %HOOKS;
+	our @HOOKS;
 	my $dir = "$CONFIGBASE/hooks";
 	return if (! -d $dir);
 
 	# Find external hooks to load
 	opendir(DIR, $dir);
-	map { $SELF = "$dir/$_"; $NAME = $_; require "$dir/$_" if (-f "$dir/$_" && !/^\./ && !/\.disabled$/); $SELF = $NAME = ''; } sort { $a cmp $b } readdir(DIR);
+	map { $SELF = "$dir/$_"; $NAME = $_; if (-f "$dir/$_" && !/^\./ && !/\.disabled$/) { require "$dir/$_"; push(@HOOKS, $_); } ; $SELF = $NAME = ''; } sort { $a cmp $b } readdir(DIR);
 	close(DIR);
 }
 
@@ -2589,10 +2646,7 @@ sub listsystem
 
 	if ($d > 8)
 	{
-       		&display("HOOKS are: \n");
-		&display($DIV);
-		print Dumper(%HOOKS);
-		&display($DIV);
+       		&display("HOOKS are: ". join(', ', @HOOKS) ."\n");
 	}
 	&display($DIV) if ($d);
 }
