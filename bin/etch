@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.1.0';
+$VERSION='1.1.1.3';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '%HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -918,6 +918,7 @@ sub generate_link($$$)
         {
         	# Check for force, force will wipe up directory if it exists
                 &away("Original of $file is a directory\n") if (! $xpath->exists('/config/link/force') );
+                &remove_file($file);
         }
 
         # Perform any pre-action commands that the user has requested
@@ -927,7 +928,7 @@ sub generate_link($$$)
         &copy_original($file, 1, $dryrun);
 
         # Create the link
-        &symlink($dest, $file, $dryrun);
+        &symlink($dest, $file);
 
         # Ensure the ownership is set properly
         &chown($uid, $gid, $file, $debug) if (!$dryrun);
@@ -1104,7 +1105,7 @@ sub generate_delete($$$$)
 # Create symlink
 sub symlink($$)
 {
-	my ($file, $dest, $dryrun) = @_;
+	my ($file, $dest) = @_;
 	&bug("Incorrect params") if (! defined $file || ! defined $dest);
         if ( compare_link_destination($dest, $file) )
         {
@@ -2744,8 +2745,18 @@ sub parsecommandline()
 	$RUNAS = $runas if ($runas);	
 	# File that is used to keep track of which files have been worked on and interaction between kids
 	umask 0;
+	# cleanup old IPC files before opening ipc
+	my $mtimeExpired=time - 1800;
+	opendir(DIR, "${VARBASE}/tmp");
+	foreach my $f (readdir(DIR))
+	{
+		next if ($f !~ /^etch_\d+$/);
+		my $st = lstat("${VARBASE}/tmp/${f}");
+		remove_file("${VARBASE}/tmp/${f}") if ($st->mtime < $mtimeExpired);
+	}
+	closedir(DIR);
 	our $IPC_namespace = "${VARBASE}/tmp/etch_${PS}";
-        system('rm -rf '. $IPC_namespace .' >/dev/null 2>/dev/null') if (!$runas && -d $IPC_namespace);
+	&remove_file($IPC_namespace) if (!$runas && -d $IPC_namespace);
         our $IPC = new Cache::FileCache({ 'namespace' => 'etch_'.$RUNAS, 'default_expires_in' => 1800, 'cache_root' => "${VARBASE}/tmp/" });
 
 	# Display a usage message if GetOptions() reported an error or if the
@@ -3220,8 +3231,8 @@ sub loginit()
 	my $expire = sprintf('%4d%02d%02d000000', $t[5]+1900, $t[4]+1, $t[3]);
 
 	my $dir;
-	opendir($dir, $LOG);
-	foreach my $file (<$dir>)
+	opendir(DIR, $LOG);
+	foreach my $file (readdir(DIR))
 	{
 		next if ($file !~ /etch-(.*)/);
 		if ($expire > $1)
@@ -3230,7 +3241,7 @@ sub loginit()
 			unlink("$LOG/$file");
 		}
 	}
-	closedir($dir);
+	closedir(DIR);
 	&display($DIV);
 }
 # two functions that either add or delete \t, this helps in making the log output more human readable
