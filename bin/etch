@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.2.0';
+$VERSION='1.1.1.3';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '@HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -1826,7 +1826,7 @@ sub process_rsync($$)
 	# Set $RSYNC_SRC from duty settings if empty
 	# Run status check on src if 
 	my $rsync_src=$RSYNC_SRC;
-	my $hc = $node->getAttribute('healthcheck') || '';
+	my $hc = $node->getAttribute("healthcheck");
 	if (! $rsync_src || $hc)
 	{
 		$hc = $defaults_xpath->getNodeText("/config/rsync/healthcheck") if (!$hc);
@@ -1835,7 +1835,7 @@ sub process_rsync($$)
 		{
 			next if ($i !~ /^rsync_src_(.*)/);
 			my $h = $1;
-			if ($hc) 
+			if ($hc && $hc ne 'false') 
 			{
 				if (&process_rsync_healthcheck($h.$hc) == 0)
 				{
