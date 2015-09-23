@@ -1993,7 +1993,7 @@ sub process_rsync($$)
 			if ( $errorfound ) { &display("COLOR:red:$_"); }	
 			elsif (/^receiving.*?list/)
 			{
-				next;	
+				true;
 			}
 			elsif (/^(sent \d|total size is)/)
 			{
