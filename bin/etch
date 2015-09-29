@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.1.1.3';
+$VERSION='1.2';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '@HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -67,7 +67,7 @@ use XML::XPath;
 use Cache::FileCache;
 
 our $DIV="----------------------------------\n";
-
+our $RET=0;
 $| = 1;
 
 #
@@ -89,7 +89,7 @@ $| = 1;
 &main();
 
 # End program
-&quit(0);
+&quit($RET);
 
 #
 # Subroutines
@@ -116,6 +116,7 @@ sub main()
                         $GENERATED{'regex'} = (); # array used for matching wildcards
                         our %GENERATETEST = undef; # Hash used to for generate/runas subroutines to let know if they will perform work
                         our $PROCESS_rsync=undef;
+			our $AWAYRET=0; # keep tracks of failures for each SOURCE, we avoid exiting whole etch if just one source fails
 
 			while ($manualfile =~ /(.*?)\/$/) { $manualfile = $1;}
 			if (!$manualfile) { $manualfile = '/'; $generateall=1; }
@@ -148,37 +149,38 @@ sub generateall($$$)
 	sub look_for_config_xml                                                                                                  
 	{                                                                                                                        
         	my ($file, $skip, $dryrun) = @_;                                                                                 
-        	if ($_ eq 'config.xml' || $_ eq 'config.xml.disabled' || $_ eq 'conf.xml' || $_ eq 'conf.xml.disabled')          
+		if (/config\.xml(\.\d+)?$/ || /conf\.xml(\.\d+)?$/ || /.config\.xml(\.\d+)?$/)
         	{                                                                                                                
-                	my $disabled = 1 if ($_ eq 'config.xml.disabled' || $_ eq 'conf.xml.disabled');                          
-                                                                                                                         
+			my $chained = $1;
                 	# Strip $SOURCEBASE from $File::Find::dir                                                                
                 	my $thisfile = $File::Find::dir;                                                                         
+			my $srcpath = $thisfile .'/'. $_;
                 	$thisfile =~ s/^$SOURCEBASE//;                                                                           
+			$thisfile = $SOURCEBASE if (!$thisfile); # allow sourcebase be destination as well
 
-                	if ($disabled)                                                                                           
+			if (/\.xml\.disabled$/)
                 	{                                                                                                        
                         	our @CONFIGPATHDISABLED if (!@CONFIGPATHDISABLED);                                       
                         	push(@CONFIGPATHDISABLED, $thisfile);                                                            
                 	}                                                                                                        
-                                                                                                                         
                 	return if ( ($skip && $thisfile =~ /^$skip(\/|$)/) || (grep { $thisfile =~ /^$_(\/|$)/ } @CONFIGPATHDISABLED) );
 
-                	unless (&findgenerated($thisfile))    
+                	unless (&findgenerated($thisfile.$srcpath))    
                 	{                                                                                                        
 				if ($dryrun eq 'process')
 				{ 
-					my $ret = &generate($thisfile, $dryrun, 0);
+					# rsync process is only suppported in main config, not chained
+					my $ret = &generate($thisfile, $dryrun, $srcpath) if (!$chained);
 				}
 				else
 				{
-                        		$GENERATED{$thisfile} = 1;                                                                       
+                        		$GENERATED{$thisfile} = $GENERATED{$thisfile . $srcpath} = 1; 
                         		eval{   
 						no warnings;                                                                             
                                 		print IPC "GENERATED:${thisfile}\n";                                                     
                                 		%GENERATETEST = %{$IPC->get('GENERATETEST')};                                            
                         		};                                                                                               
-                        		my $ret = &generate($thisfile, $dryrun, 0);                                                      
+                        		my $ret = &generate($thisfile, $dryrun, $srcpath);
                         		push(@CONFIGPATHDISABLED, $thisfile) if ($ret == 100);                                           
                         		if ($ret != 100)                                                                                 
                         		{                                                                                                
@@ -190,12 +192,15 @@ sub generateall($$$)
                                 		};                                                                                       
                         		}                                                                                                
                 		}                                                                                                        
+				# Dont continue with this source if functions called on away
+				die(&bugmsg("::AWAY::")) if ($AWAYRET);
 			}
         	}                                                                                                                
 	} 
 
 	# process parent directories for setup information, currently used for rsync info
-	if ($file ne '/')
+	# only looks for non chained config files
+	if ($file ne '/') # manualpaths
 	{
 		my @files = split('/', $file);
 		pop(@files);
@@ -206,25 +211,35 @@ sub generateall($$$)
 			$maxdepth++;
 			$f .= ($f ne '/'?'/':''). $dir;
 			my ($varf) = &translatepath($f, 'var');
+			eval {
 			find( { preprocess => sub { 
 					my $depth = $File::Find::dir =~ tr[/][];  
-					return @_ if ($depth < $max_depth - 1);
-					return grep { not -d } @_;
+					return sort { $a cmp $b } @_ if ($depth < $max_depth - 1);
+					return sort { $a cmp $b } grep { not -d } @_;
 				}, 
-				wanted => sub { &look_for_config_xml($f, $skip, 'process'), } 
+				wanted => sub { &look_for_config_xml($f, $skip, 'process'), }
 			      }, $SOURCEBASE.$varf);
+			};
 		}
 	}
 	# if wildcard is present, look for contents inside $file
-        my ($varfile) = &translatepath($file, 'var');
-	find( { wanted => sub { &look_for_config_xml($file, $skip, $dryrun) } }, $SOURCEBASE.$varfile);	
+       	my ($varfile) = &translatepath($file, 'var');
+	my $varf = $varfile;
+	$varf = '' if ($SOURCEBASE eq $varfile); # allow for source be the destination
+	eval {
+		find( {  preprocess => sub { return sort { $a cmp $b } @_; }, 
+			 wanted => sub { &look_for_config_xml($file, $skip, $dryrun) } 
+		      }, $SOURCEBASE.$varf);	
+	};
 
 	# file was not generated, check if this file is part of rsync process
-	if ($file ne '/' && !&findgenerated($varfile) && $PROCESS_rsync)
+	if ($file ne '/' && !&findgenerated($varfile) && $PROCESS_rsync) #manualpaths
 	{
 		foreach my $type ( ('setup', 'directory') )
 		{
-			our $FILE = $ENV{'ETCH_FILE'} = $PROCESS_rsync->{parent};
+			our $FILE=$ENV{'ETCH_FILE'}=$PROCESS_rsync->{parent};
+                	our $FILEBASE=$ENV{'ETCH_FILEBASE'}=basename($FILE);
+                	our $DIR=$ENV{'ETCH_DIR'}=dirname($FILE);
 			if (&ismine("/config/$type/rsync", $PROCESS_rsync->{xpath}, "START Etching $FILE via rsync process". ($dryrun?'(DRYRUN)':'') ."\n") && $dryrun != 9)
 			{
 				&process_rsync($type, $file, $PROCESS_rsync->{xpath}, $dryrun, $PROCESS_rsync);
@@ -314,16 +329,29 @@ sub generate
 {
 	my $dst = shift || &bug("Missing \$file in &generate()");
 	my $dryrun = shift;  # Can be false or process
-	my $test = shift; # Can be false, used for testing if we are searching for files, 
-			  # each sub will create $GENERATETEST{'subroutinename'} with arguments that were given
+	my $srcpath = shift || "$SOURCEBASE/$dst";
+
 	my $ret;
 	my $ret1=100;	
 
-	#my $xpath = &readconfig("$SOURCEBASE/". ${&translatepath($dst, 'var')}[0]);
-	my $xpath = &readconfig("$SOURCEBASE/$dst");
-	chdir "$SOURCEBASE/$dst" || &away("chdir to $SOURCEBASE/$dst:  $!\n");
+	# allow for config.xml to be in source to allow compination of source configs and data files
+	my $xpath = &readconfig($srcpath);
+	return(1) if (!$xpath);
+	my $srcpathdir = dirname($xpath->{src});
+	chdir($srcpathdir) || &away("chdir to $srcpathdir:  $!\n");
 
-	#&log("generate($dst : $manualfile)\n");
+	# allow for $dst to be set from config
+	my $node = ($xpath->findnodes("/config"))[0];
+	foreach my $alt ( 'destination', 'dst', 'dest' )
+	{
+		my $altdst = $node->getAttribute($alt);
+		if ($altdst) 
+		{ 
+			$dst = $altdst;
+			&log("CONFIG: Alternative destination set: $dst", 8);
+			last;
+		}
+	}
 
 	foreach my $file ( &translatepath($dst) )
 	{
@@ -333,22 +361,24 @@ sub generate
 		{ 
 			if ( $xpath->exists("/config/setup/rsync") || $xpath->exists("/config/directory/rsync"))
 			{
-				our $PROCESS_rsync = { process => 1, xpath => $xpath, parent => $file };
-				&log("PROCESS $file (rsync config found)\n", 7);
+				our $PROCESS_rsync = { process => 1, xpath => $xpath, parent => $file};
+				&log("  PROCESS $file (rsync config found)\n", 7);
 			}
 			elsif ($xpath->exists("/config/directory/create"))
 			{
 				# dont include this dir in rsync process
 				our $PROCESS_rsync = undef;
-				&log("PROCESS $file (dir config found)\n", 7);
+				&log("  PROCESS $file (dir config found)\n", 7);
 			}
-			else { &log("PROCESS $file\n", 7); }
+			else { &log("  PROCESS $file\n", 7); }
 			next;
 		}
 
 		next if ( !$generateall && $manualfile && $file !~ /^$manualfile(\/|$)/);
 
                 our $FILE=$ENV{'ETCH_FILE'}=$file;
+		our $FILEBASE=$ENV{'ETCH_FILEBASE'}=basename($FILE);
+        	our $DIR=$ENV{'ETCH_DIR'}=dirname($FILE);
 
 		$ret1=0;
 
@@ -387,6 +417,10 @@ sub generate
 		# the perlsyn man page for more details on using last inside 'if'
 		# blocks.
 
+		
+		# Run command on path
+		$done = &generate_task($file, $xpath, $dryrun, $test) if ($xpath->exists('/config/task') && !$done);
+
 		# Regular file
 		$done = &generate_file($file, $xpath, $dryrun, $test) if ($xpath->exists('/config/file') && !$done);
 	
@@ -407,7 +441,7 @@ sub generate
 		
 		# Run post runas
 		&logprepop();
-		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n") if ($dryrun != 9 && $ISMINE);
+		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n");
 		return($ret) if( $ret = &process_runas($file, $xpath, $test, 'post') );
 	}
 
@@ -632,7 +666,6 @@ sub generate_file($$$$)
         	&process_setup($file, $xpath, $dryrun);
 
         	my @plainnodes = $xpath->findnodes('/config/file/source/plain');
-                &check_for_inconsistency($file, @plainnodes);
 
                 # Just slurp the file in
                 my $plain = $plainnodes[0]->string_value;
@@ -857,6 +890,89 @@ sub generate_file($$$$)
 	return(1);
 }
 
+sub generate_task($$$)
+{
+	my ($file, $xpath, $dryrun) = @_;
+	
+	my $when = 'task';
+	if ( (&ismine("/config/$when/command", $xpath) || &ismine("/config/$when/exec", $xpath)) && $dryrun != 9)
+	{
+		eval { &process_depend($file, $xpath, $dryrun); };
+		&process_setup($file, $xpath, $dryrun);
+	}
+	else
+	{
+		&log("\tNo task found for $file, doing nothing\n", 7) if ($dryrun != 9);
+		return(0);
+	}
+
+	# when, month, day, wday, time
+	if ($xpath->exists("/config/$when/when"))
+	{
+		# convert everything to seconds
+		my @ts = localtime(time);
+		my ($tsmonth, $tsday, $tswday, $tstime)= ($ts[4]+1, $ts[3], $ts[6], $ts[0] + $ts[1]*60 + $ts[2]*3600);
+
+		# allow for comma delimits
+		my ($node) = $xpath->findnodes("/config/$when/when");
+                my @whenmonth = split(',', $node->getAttribute('month') || $tsmonth); 
+                my @whenday = split(',', $node->getAttribute('day') || $tsday);
+                my @whenwday = split(',', $node->getAttribute('wday') || $tswday);
+                my @whentime = split(',', $node->string_value);
+
+		my $match=0;
+		foreach my $month (@whenmonth)
+		{
+			next if ($month != $tsmonth);
+			foreach my $day (@whenday)
+			{
+				next if ($day != $tsday);
+				foreach my $wday (@whenwday)
+				{
+					next if ($wday != $tswday);
+					foreach my $time (@whentime)
+					{
+						if ($time =~ /(\d+):(\d+)-(\d+):(\d+)/)
+						{
+							$match = 1 if ($tstime >= $1*3600+$2*60 && $tstime <= $3*3600+$4*60);
+						}
+					}
+				}
+			}
+		}
+		my $msg = sprintf("%s [%s] %s-%s != %01d:%01d [%d] %d-%d", join(',',@whentime), join(',', @whenwday), join(',', @whenmonth), join(',',@whenday), $ts[2], $ts[1], $tswday, $tsmonth, $tsday);
+		if (!$match)
+		{
+			&log(" Not processing $when for $file because it did not match schedule: $msg");
+			return(0);
+		}
+		&log(" Processing $when for $file due to schedule match: $msg");
+	}
+
+	# trigger: execute command if return code returns non zero then do not proceed
+	if ($xpath->exists("/config/$when/trigger"))
+	{
+		my ($ret, $retcode) = &process_command($when, 'trigger', $xpath, 0);	
+		if ($retcode != 0)
+		{
+			&log(" Trigger for $file did not match, retcode: $retcode");
+			return(0);	
+		}
+		
+	}
+	
+	&process_pre(@_);
+
+	my ($ret, $retcode) = &process_command($when, @_);
+	if ($retcode != 0)
+	{
+		&log("Task for $file failed: $retcode");
+		return(0);
+	}
+
+	&process_post(@_);
+}
+
 sub generate_link($$$)
 {
 	my ($file, $xpath, $dryrun) = @_;
@@ -872,7 +988,6 @@ sub generate_link($$$)
 		&process_setup($file, $xpath, $dryrun);
 
         	my @destnodes = $xpath->findnodes('/config/link/dest');
-                &check_for_inconsistency($file, @destnodes);
                 $dest = $destnodes[0]->string_value;
         }
         elsif (&ismine('/config/link/script', $xpath) && $dryrun != 9)
@@ -1380,7 +1495,7 @@ sub isrefresh
 
 	if (my @nodes = $xpath->findnodes($dst))
 	{
-		my $refresh = $nodes[0]->getAttribute('refresh');
+		my $refresh = $nodes[0]->getAttribute('refresh') || $nodes[0]->getAttribute('interval'); 
 		if ($refresh)
 		{
 			my $str = "refresh". $dst;
@@ -1414,9 +1529,7 @@ sub ismine
 	my $dst = shift;	
 	my $xpath = shift;
 	my $msg = shift || "START Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n";
-	our $ISMINE if (!defined $ISMINE);
-	$ISMINE='';
-	&log("Processing $FILE ". ($dryrun?'(DRYRUN)':''), 7 );
+	&log("ISMINE $FILE ". ($dryrun?'(DRYRUN)':''), 9 );
 	my @nodes;
 	my @matched;
 	if (@nodes = $xpath->findnodes($dst))
@@ -1449,7 +1562,6 @@ sub ismine
                         	&log($msg);
                         	&logprepush();
                 	}
-			$ISMINE=$FILE;
 			if ($debug > 8) { map { &log("NODE MATCH: " . $_->toString) } @matched; }
 			elsif ($dryrun == 9)
 			{
@@ -1459,20 +1571,6 @@ sub ismine
 		}
 	}
 	return(0);	
-}
-
-sub check_for_inconsistency
-{
-	my ($file, @nodes) = @_;
-
-	my $first_node_text = $nodes[0]->string_value;
-	# first_node_text takes precedence
-
-	#foreach my $node_text (map { $_->string_value } @nodes)
-	#{
-	#	&away("Inconsistent entry for $file\n") if ($node_text ne $first_node_text);
-	#}
-	return 0;
 }
 
 # returns contents of a file
@@ -1634,6 +1732,7 @@ sub process_setup
 	&log("Processing setup commands\n", 7);
 	&process_command('setup', @_);
 	&process_rsync('setup', @_);
+	&process_dutymod('setup', $xpath);
 }
 sub process_pre
 {
@@ -1643,6 +1742,7 @@ sub process_pre
 	&log("Processing pre-action commands\n", 7);
 	&process_command('pre', @_);
 	&process_rsync('pre', @_);
+	&process_dutymod('pre', $xpath);
 }
 sub process_post
 {
@@ -1652,6 +1752,28 @@ sub process_post
 	&log("Processing post-action commands\n", 7);
 	&process_command('post', @_);
 	&process_rsync('post', @_);
+	&process_dutymod('post', $xpath);
+}
+# process duty modification from insice config
+sub process_dutymod
+{
+	my ($when, $xpath) = @_;
+	#add
+	foreach my $node ( $xpath->findnodes("/config/$when/dutyadd") )
+	{
+		my %duties = map { $_ => 1 } @DUTIES;
+		&log("Adding duty: ". $node->string_value, 8);
+		$duties{$node->string_value}=1;
+		@DUTIES = keys %duties;
+	
+	}
+	foreach my $node ( $xpath->findnodes("/config/$when/dutydel") )
+        {
+		my %duties = map { $_ => 1 } @DUTIES;
+		&log("Deleting duty: ". $node->string_value, 8);
+		delete $duties{$node->string_value} if (exists $duties{$node->string_value});
+		@DUTIES = keys %duties;
+        }
 }
 
 # used for template purpose as well
@@ -1675,7 +1797,6 @@ sub process_script
 		&log("Processing $when/script for $file\n", 4);
 
 		my @nodes = $xpath->findnodes("/config/$when/script");
-		&check_for_inconsistency($file, @nodes);
 
 		$script = $nodes[0]->string_value;
 		# use common script if common is enabled
@@ -1703,9 +1824,9 @@ sub process_script
         # $ORIGINAL_FILE so that they can be shared with the Safe
         # compartment.
 
-        our $FILE = $ENV{'ETCH_FILE'} = $file;
-	our $FILEBASE = basename($file);
-        our $DIR = dirname($FILE);
+	our $FILE=$ENV{'ETCH_FILE'}=$file;
+        our $FILEBASE=$ENV{'ETCH_FILEBASE'}=basename($FILE);
+        our $DIR=$ENV{'ETCH_DIR'}=dirname($FILE);
         our $ORIGINAL_FILE;
         if (-e "$ORIGBASE/$file")
         {
@@ -1876,16 +1997,18 @@ sub process_rsync($$)
 		}
 	}
 
-	my ($dst, $altdst, $command, $options, $exclude, $excludefrom, $background);
+	my ($dst, $altdst, $command, $options, $exclude, $excludefrom, $include, $includefrom, $background);
 	my $manual = 0;
 	foreach my $attribute ($node->getAttributes())
 	{
 		my ($key, $val) = ($attribute->getName, $attribute->getData);
 		if ($key eq 'exclude-from') { $excludefrom = $val; }
 		elsif ($key eq 'exclude') { $exclude = $val; }
+		elsif ($key eq 'include') { $include = $val; }
+		elsif ($key eq 'include-from') { $includefrom = $val; }
 		elsif ($key eq 'command') { $command = $val; }
 		elsif ($key eq 'options') { $options = $val; }
-		elsif ($key eq 'dest')    { $altdst = $dst = $val;    }
+		elsif ($key eq 'dest' || $key eq 'dst' || $key eq 'destination')    { $altdst = $dst = $val;    }
 		elsif ($key eq 'manual')  { $manual = $val; }
 		elsif ($key eq 'background') { $background=1 if ($val eq 'true'); }
 	}
@@ -1899,70 +2022,67 @@ sub process_rsync($$)
 	$dst = $file if (!$dst);
 	$command = $defaults_xpath->getNodeText("/config/rsync/command") if (!$command);
 	$exclude = $defaults_xpath->getNodeText("/config/rsync/exclude") if (!$exclude);
+	$include = $defaults_xpath->getNodeText("/config/rsync/include") if (!$include);
 	my $defaultOptions = $defaults_xpath->getNodeText("/config/rsync/options");
 	if ($options) { $options =~ s/::DEFAULT::/$defaultOptions/; } # Allow for appending to default options
 	else { $options = $defaultOptions; }
+	$options .= " --include='${include}'" if ($include);
+        $options .= " --include-from=${includefrom}" if ($includefrom);
 	$options .= " --exclude='${exclude}'" if ($exclude);
 	$options .= " --exclude-from=${excludefrom}" if ($excludefrom);
         $options .= " --dry-run" if ($dryrun);
 	$options .= " -v";
 
 	# generate rsync options from --exclude/--include
-	$options .= " ". join(" ", map { "--include=\"$_\"" } @INCLUDES) if (@INCLUDES);
-	$options .= " ". join(" ", map { "--exclude=\"$_\"" } @EXCLUDES) if (@EXCLUDES);
+	$options .= " ". join(" ", map { "--include=$_" } @INCLUDES) if (@INCLUDES);
+	$options .= " ". join(" ", map { "--exclude=$_" } @EXCLUDES) if (@EXCLUDES);
+
+	# prepare src and dst
+        while ($src =~ /(.*?)\/$/) { $src = $1;}
+        while ($dst =~ /(.*?)\/$/) { $dst = $1;}
+        $src .= "/";
+        $dst .= "/";
+        # get rid of duplicate //
+        $src =~ s/\/\//\//g while ($src =~ /\/\//);
+        $dst =~ s/\/\//\//g while ($dst =~ /\/\//);
 
 	# process mode via rsync, update src to include subdirectories from $dst
 	my $doProcess=0;
 	if ($process_options && !$altdst && exists $process_options->{process} && $process_options->{parent} ne $dst)
-	{
+	{ 
 		if ($altdst) 
 		{ 
 			&log("Not processing subdirectory rsync because 'dest: $altdst' key exists in config."); 
 			return(0);
 		}
 		my $parent = $process_options->{parent};
-		my $subdir = $dst;
-		$subdir =~ s/^$parent//;
-		$src .= "/$subdir/";
-		$doProcess=1;
-		chdir "$SOURCEBASE/$parent" || &away("chdir to $SOURCEBASE/$parent:  $!\n");
-	}
+		my $subdir = $dst; $subdir =~ s/^$parent//; $subdir = $1 if ($subdir =~ /(.*)\/$/); 
+		$subdir =~ s/\/\//\//g while ($subdir =~ /\/\//);
+		my @inc = map { push(@_, $_); join('/', @_) } split('/', $subdir);
 
-	# prepare src and dst
-	while ($src =~ /(.*?)\/$/) { $src = $1;}
-	while ($dst =~ /(.*?)\/$/) { $dst = $1;}
-	$src .= "/";
-        $dst .= "/";
-	
-	# get rid of duplicate //
-	while ($src =~ /\/\//) { $src =~ s/\/\//\//g;}
-	while ($dst =~ /\/\//) { $dst =~ s/\/\//\//g;}
-
-	# if in process mode and we are processing file, then chop off trailing /
-	# @TODO: come up with a cleaner way to differentiate between file and directory $dst
-	if ( $doProcess )
-	{
-		my $loc = $dst;
-		$loc =~ /(.*?)\/$/; $loc = $1;
-		if ( -f $loc || -l $loc )
-		{
-			$dst = $loc;
-			$src =~ s/\/$//;
-			&log("Detected destination as file type, modifying src/dst to only process file", 8);
-		}
-		elsif ( -d $loc )
-		{
-			&log("Detected destination as directory type, modifying src/dst to process directory", 8);
-		}
+		# figure out if we are processing directory or something else by stripping out slashes
+                my $loc = $dst;
+		$loc = $1 if ($loc =~ /(.*)\/$/);
+                if ( -f $loc || -l $loc )
+                {
+                        &log("Detected destination as file type, modifying src/dst to only process file", 8);
+                }
 		else
-		{
-			&log("Unable to determine destination type, assuming src/dst to be directory", 8); 
-		}
-		
+                {
+			push(@inc, $subdir.'/**');
+                        &log("Detected destination as directory type, modifying src/dst to process directory", 8);
+                }
+		$options .= " ". join(" ", map { "--include=$_" if ($_) } @inc) . " --exclude=*";
+
+		my $srcpath = "$SOURCEBASE/$parent";
+        	$srcpath = $parent if ($SOURCEBASE eq $parent);
+		chdir $srcpath || &away("chdir to $srcpath:  $!\n");
+		$dst = $parent.'/';
 	}
 
 	my $cmd = "$command $options $src $dst";
-	&log("Processing RSYNC: $cmd\n", $debug);
+	if ($debug > 4) { &log("Processing RSYNC: $cmd\n", $debug); }
+	else { &log("Processing RSYNC: ($src, $dst)"); }
 
 	return(0) if (! &isrefresh("/config/$when/rsync", $FILE, $xpath));
 
@@ -1991,14 +2111,18 @@ sub process_rsync($$)
 			$errorfound = 1 if (/rsync error:/);
 			$successfound = 1 if (/\d+\s+speedup/);
 			if ( $errorfound ) { &display("COLOR:red:$_"); }	
-			elsif (/^receiving.*?list/)
+			elsif (/^receiving.*?list/ || /sending incremental file list$/)
 			{
 				true;
 			}
 			elsif (/^(sent \d|total size is)/)
 			{
-				if ($errorfound) { &display("COLOR:red:$_"); }
-				else { &display("COLOR:yellow:$_"); }
+				if ($debug > 4)
+				{
+					if ($errorfound) { &display("COLOR:red:$_"); }
+					else { &display("COLOR:yellow:$_"); }
+				}
+				else { &log($_, 2); }
 			}
 			else { &display("rsync($src, $dst): $_"); }
 			push(@errors, $_); 
@@ -2018,8 +2142,9 @@ sub process_rsync($$)
                         }
         	}
         	close(CMD);
+		while(<CMDERR>) { print "TEST: $_\n"; }
 		$ret = $? >> 8;
-		if ($errorfound || !$successfound)
+		if ($errorfound || !$successfound || ($ret && ($ret != 23 || $ret != 24)) )
         	{
                 	&log("ERRORS FOUND! $file => rsync($src, $dst)\n");
                 	&log($DIV);
@@ -2051,7 +2176,7 @@ sub process_rsync($$)
 	if ($background) { $currently_locked_file=''; }
 	else             { waitpid($bgpid, 0); }
 
-	&quit($ret) if ($ret);
+	&away("rsync failed", $ret) if ($ret);
 
 	return(1);
 }
@@ -2066,13 +2191,14 @@ sub process_command
 	my $ret=0;
 
 	my $str;
-	if   ($xpath->exists("/config/$when/exec")) { $str="/config/$when/exec"; }
+	if ($file eq 'trigger') { $str = "/config/$when/$file" if ($xpath->exists("/config/$when/$file")); }
+	elsif ($xpath->exists("/config/$when/exec")) { $str="/config/$when/exec"; }
 	elsif ($xpath->exists("/config/$when/command")) { $str="/config/$when/command"; }
 	return($ret) if (!$str);
 
 	my @nodes = $xpath->findnodes($str);
 	my $exec = $nodes[0]->string_value;
-	&log("Executing '$exec'\n",$debug);
+	&log(($file eq 'trigger'?'Testing trigger':'Executing') ." '$exec'\n",$debug);
 	return(0) if (! &isrefresh($str, $file, $xpath));
 		
 	my $bgpid;
@@ -2113,19 +2239,25 @@ sub process_command
                 # hard to figure out what's going on if it fails.  So
                 # include the command in the message if there was a
                 # failure.
-                my $execmsg = '';
-                $execmsg = "'$exec' " if ($when eq 'setup');
-                &away("Setup/Pre/Post command $execmsg, for $file exited with non-zero value: $ret", $r);
+		if ($file ne 'trigger')
+		{
+                	my $execmsg = '';
+                	$execmsg = "'$exec' " if ($when eq 'setup');
+                	&away("Setup/Pre/Post command $execmsg, for $file exited with non-zero value: $ret", $r);
+		}
 	}
-	$ret=1;
-	&isrefresh($str, $file, $xpath, 1);
-	return($ret);
+	else
+	{
+		$ret=1;
+		&isrefresh($str, $file, $xpath, 1);
+	}
+	return($ret, $r);
 }
 
 sub process_depend
 {
-        my $file = shift || &bug("BUG:  No file received");
-        my $xpath = shift || &bug("BUG:  No xpath received");
+        my $file = shift || &bug("No file received");
+        my $xpath = shift || &bug("No xpath received");
 	my $dryrun = shift;
 
 	return if ( ! $xpath->exists("/config/depend") );
@@ -2454,10 +2586,12 @@ sub check_timestamp
 		my $st = lstat($stamppath) || &away("unable to stat $stamppath: $!\n");
 		my $stamp = $st->mtime;
 		return($stamp) if ($alt);
-		opendir(S, "$SOURCEBASE/$file") || &away("unable to read directory $SOURCEBASE/$file: !$\n");
+		my $srcpath = "$SOURCEBASE/$file";
+        	$srcpath = $file if ($SOURCEBASE eq $file);
+		opendir(S, $srcpath) || &away("unable to read directory $srcpath: !$\n");
 		foreach my $entry (readdir(S))
 		{
-			my $st1 = lstat("$SOURCEBASE/$file/$entry") || &away("unable to stat $SOURCEBASE/$file/$entry: $!\n");
+			my $st1 = lstat("$srcpath/$entry") || &away("unable to stat $srcpath/$entry: $!\n");
 			$r = 1 if ($st1->mtime > $stamp);
 		}
 		closedir(S);
@@ -2583,11 +2717,18 @@ sub findsystem
 	our $SYSTEMGROUP = $g[0];
 	our $SYSTEMGID = $g[2];
 
+	# if hooks modify sources then make sure those mods are moved to bottom of sources
+	my @origsources = @SOURCES;
+	my @sources = @SOURCES;
+	my @diffsources;
 	# Load External hooks
-	&loadhooks();
-
+        &loadhooks();
+	foreach my $s (@SOURCES) { push(@diffsources, $s) if (! grep { $_ eq $s } @sources); }
 	# add any additional sources from source.d based on duties
-	map { push(@SOURCES, "$CONFIGBASE/source.d/$_") if (-d "$CONFIGBASE/source.d/$_"); } @DUTIES;
+        foreach(@DUTIES) { push(@sources, "$CONFIGBASE/source.d/$_") if (-d "$CONFIGBASE/source.d/$_"); };
+	if ($SOURCESmod) { @SOURCES = @origsources; }
+	else { @SOURCES = (@sources, @diffsources); }
+	@SOURCES = map { s/\/\//\//g while (/\/\//); if (/(.*)\/$/){ $1; } else { $_; } } @SOURCES; # cleanup sources directories
 }
 sub listsystem
 {
@@ -2706,6 +2847,7 @@ sub parsecommandline()
 	our $CONFIGBASE = $ETCH_PREFIX .'/etc';;
 	our $SOURCEBASE; # current source
 	our @SOURCES; # contains multiple sources
+	our $SOURCESmod=0;
 
 	our $etchpush=0;
 	our $debug=1;
@@ -2746,7 +2888,7 @@ sub parsecommandline()
 		'no-color|no_color|nocolor|ansi_colors_disabled' => \$nocolor,
 		'module|duty=s' => sub { @MANUALDUTIES = grep {$_} split(/,|\s+/, $_[1]); push(@OPTIONS, "--duty='$_[1]'"); },
 		'withmodule|withduty|with-duty=s' => sub { @DUTIES = split(/,|\s+/, $_[1]); push(@OPTIONS, "--withduty='$_[1]'"); },
-		'source=s' => sub { @SOURCES = grep {$_} split(',', $_[1]); push(@OPTIONS, "--source='$_[1]'"); },
+		'source=s' => sub { @SOURCES = grep {$_} split(',', $_[1]); push(@OPTIONS, "--source='$_[1]'"); $SOURCESmod=1; },
 		'config=s' => sub { $CONFIGBASE=$_[1]; push(@OPTIONS, "--config='$_[1]'"); },
 		);
 
@@ -2892,9 +3034,9 @@ sub etchpush
                 	        	$i .= "$dir/";
 					foreach my $source ( @SOURCES )
 					{
-                	        		next if (! -f "${source}${i}config.xml");
-	                        		my $xpath = &readconfig("${source}${i}");
-						if (my $j = $xpath->getNodeText("/config/connect"))
+	                        		my $xpath = &readconfig("${source}${i}"); # connect only works on first returned config file
+						my $j = $xpath->getNodeText("/config/connect") if ($xpath);
+						if ($j)
 						{
 							push(@{$connect{$j}}, $f);
 							$found=1;
@@ -3308,58 +3450,54 @@ sub logprepop()
 	pop(@LOGPRE);
 }
 
-# Gracefully die
+# Gracefully die at source
 sub away 
 {
         my $msg = shift || 'UNKNOWN ERROR';
-        my $code = shift;
-	$code = 2 if (! defined $code);
-
-        &display("$msg\n");
-        eval {  no warnings; print IPC "ERROR\n"; close(IPC); };
-
-	&quit($code);
+        my $code = shift || 2;
+	&bug($msg, $code);
 }
 
-# Display bug
+# Display bug/error
+sub bugmsg { our $BUGMSG=shift; our $BUGMSGLAST if (!defined $BUGMSGLAST); }
 sub bug
 {
-	my $msg = "BUG: ". ($BUGMSG?"($BUGMSG)\n":"") ." ". shift;
-	my $noexit = shift || 0;
-
-	# find out starting point of self
-	open(f, $ETCH);
-	my $lcount=0;
-	while(<f>) { last if (/^#\!.*?perl/); $lcount++; }
-	close(f);
-
-	my @roadmap;
-	# build roadmap that led to bug
-	no warnings;
-	for (my $x = 0; $i < 99; $i++)
-	{
-		my $l = (caller($i-1))[2];
-		next if (!$l);
-		$l += $lcount;
-		my $f = (caller($i))[3] || 'main';
-		next if ($f eq 'main::__ANON__');
-		unshift(@roadmap, "${f}():${l}") ;
-	}	
-
+	my $msg = "ERROR: ".($BUGMSG?$BUGMSG:shift);
+	my $noexit = ($BUGMSG?1:shift || 0);
 	chomp($msg);
-	$msg .= "\nMAP: ". join(' -> ', @roadmap) ."\n";	
-	&display($msg);
+	return() if ($msg eq $BUGMSGLAST);
+	our $BUGMSGLAST=$msg;
+	&display("\n".$DIV.$msg."\n".$DIV) if ($msg !~ /::AWAY::/);
 
 	eval {  no warnings; print IPC "ERROR\n"; close(IPC); };
+	if ($noexit)
+	{
+		$AWAYRET=$msg;
+		$RET++;
+		return();
+	}
+	&display("CALLMAP: ". &callmap() ."\n$DIV");
 	&unlock_currently_locked_file();
-	&quit(255) if (!$noexit);
+	&quit(255);
 }
-# init message that bug will display if bug is invoked
-sub buginit
+# returns function call map
+sub callmap
 {
-	our $BUGMSG = shift || '';
+	my $type = shift || 'text';
+	my @map;
+	# build roadmap that led to bug
+        no warnings;
+        for (my $x = 0; $i < 99; $i++)
+        {
+                my $l = (caller($i-1))[2];
+                next if (!$l);
+                my $f = (caller($i))[3] || 'main';
+                next if ($f eq 'main::__ANON__');
+                unshift(@map, "${f}()") ;
+        }
+	return(join(' -> ', @map)) if ($type eq 'text');
+	return(@map);
 }
-
 
 sub quit
 {
@@ -3386,33 +3524,46 @@ sub quit
         exit($exit);
 }
 
+# accepts direct path to config or to file where then it searches for config
+# returns xpath
 sub readconfig($)
 {
-	my $file = shift;
-        if (! -f "$file/config.xml" && ! -f "$file/conf.xml") { &bug("config.xml or conf.xml does not exist for $file\n"); }
-
-        # Use XML::Twig to load and filter the config.xml, removing any
-        # elements that don't apply to this host.
-	my $cfile = "$file/config.xml";
-	$cfile = "$file/conf.xml" if (-f "$file/conf.xml");
-        my $twig = XML::Twig->new( twig_handlers => { _all_ => \&check_attributes } );
-	&buginit("$cfile for $file is malformed");
-        $twig->safe_parsefile($cfile) || &bug("$cfile for $file is malformed");
-	&buginit();
-
-        # Check the filtered file against the DTD
-        my $filtered_xml = $twig->sprint;
-	
-	# Now read the filtered XML into an XML::XPath object
-        my $xpath = XML::XPath->new( xml => $filtered_xml );
+	my $src = shift;
+	my ($srcfile, $xpath);
+	if (-f $src) { $srcfile=$src; }
+	else
+	{
+		&bug("Unable to find config files in $src as its not a directory!") if (! -d "$src");
+		opendir(DIR, $src);
+		foreach (sort { $a cmp $b } readdir(DIR))
+		{
+       			next if (!/config\.xml(\.\d+)?$/ && !/conf\.xml(\.\d+)?$/ && !/.config\.xml(\.\d+)?$/);
+			$srcfile="$src/$_";
+		}
+	}	
+	&log("CONFIG: $srcfile", 9);
+	&bugmsg("Malformed XML: $srcfile");
+	# Use XML::Twig to load and filter the config.xml, removing any
+       	# elements that don't apply to this host.
+       	my $twig = XML::Twig->new( twig_handlers => { _all_ => \&check_attributes } );
+       	my $r = $twig->safe_parsefile($srcfile);
+	if ($r)
+	{
+       		# Check the filtered file
+       		my $filtered_xml = $twig->sprint;
+		# Now read the filtered XML into an XML::XPath object
+       		$xpath = XML::XPath->new( xml => $filtered_xml );
+	}	
+	&bugmsg();
+	$xpath->{'src'} = $srcfile if ($xpath);
 	return($xpath);
 }
 
 INIT 
 {
-	&buginit();
+	&bugmsg();
         $SIG{__DIE__} = sub { &bug($_[0]); };
-        $SIG{INT} = sub { &away($_[0]); };
+        $SIG{INT} = sub { &bug($_[0]); };
         $SIG{'__WARN__'} = sub { &display($_[0]); };
 }
 
