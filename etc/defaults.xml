@@ -4,7 +4,7 @@
 	<LOGDAYS>60</LOGDAYS>
         <VARBASE></VARBASE>
 
-	<alert>sendmail foo@foo.com</alert>
+	<alert>mail -s "Sysetch alert" foo@sysetch.com</alert>
 
 	<file>
 		<perms>444</perms>
