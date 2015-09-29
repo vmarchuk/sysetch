@@ -4,6 +4,8 @@
 	<LOGDAYS>60</LOGDAYS>
         <VARBASE></VARBASE>
 
+	<alert>sendmail foo@foo.com</alert>
+
 	<file>
 		<perms>444</perms>
 		<warning_file>warning.txt</warning_file>
