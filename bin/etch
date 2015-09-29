@@ -441,7 +441,7 @@ sub generate
 		
 		# Run post runas
 		&logprepop();
-		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n");
+		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n") if ($dryrun != 9);
 		return($ret) if( $ret = &process_runas($file, $xpath, $test, 'post') );
 	}
 
