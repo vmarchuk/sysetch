@@ -1499,7 +1499,7 @@ sub isrefresh
 		my $refresh = $nodes[0]->getAttribute('refresh') || $nodes[0]->getAttribute('interval'); 
 		if ($refresh)
 		{
-			my $str = "refresh". $dst;
+			my $str = "refresh". $dst .'_'. basename($xpath->{src});
 			$str =~ s/\//_/g;
 			if ($update)
 			{
@@ -1509,7 +1509,7 @@ sub isrefresh
 			{
 				my $ts=time();
         			my $ets = &check_timestamp($FILE, $str);
-        			my $expired = $ts - $ets;
+				my $expired = $ts - $ets;
         			if ($expired < $refresh)
         			{
                 			&log(" Not processing 'refresh mode' for $dst because it's not yet expired, ". ($refresh - $expired) ." second(s) left.");
@@ -2143,7 +2143,6 @@ sub process_rsync($$)
                         }
         	}
         	close(CMD);
-		while(<CMDERR>) { print "TEST: $_\n"; }
 		$ret = $? >> 8;
 		if ($errorfound || !$successfound || ($ret && ($ret != 23 || $ret != 24)) )
         	{
@@ -2578,10 +2577,7 @@ sub check_timestamp
 
 	# Check to see if a timestamp record exists for this file.  If not
 	# then this is is the first timestamp check for this file.
-	if (! -f $stamppath)
-	{
-		$r = 1;
-	}
+	if (! -f $stamppath) { $r = 1; }
 	else
 	{
 		my $st = lstat($stamppath) || &away("unable to stat $stamppath: $!\n");
