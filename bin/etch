@@ -940,13 +940,14 @@ sub generate_task($$$)
 				}
 			}
 		}
-		my $msg = sprintf("%s [%s] %s-%s != %01d:%01d [%d] %d-%d", join(',',@whentime), join(',', @whenwday), join(',', @whenmonth), join(',',@whenday), $ts[2], $ts[1], $tswday, $tsmonth, $tsday);
+		my $msgSched = sprintf("%s [%s] %s-%s",  join(',',@whentime), join(',', @whenwday), join(',', @whenmonth), join(',',@whenday));
+		my $msgNow = sprintf("%01d:%01d [%d] %d-%d", $ts[2], $ts[1], $tswday, $tsmonth, $tsday);
 		if (!$match)
 		{
-			&log(" Not processing $when for $file because it did not match schedule: $msg");
+			&log(" Not processing $when for $file because it did not match schedule: $msgSched != $msgNow");
 			return(0);
 		}
-		&log(" Processing $when for $file due to schedule match: $msg");
+		&log(" Processing $when for $file due to schedule match: $msgSched == $msgNow");
 	}
 
 	# trigger: execute command if return code returns non zero then do not proceed
