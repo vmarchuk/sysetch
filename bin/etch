@@ -37,7 +37,7 @@ exit 5
 
 $NAME='SysEtch';
 $AUTHOR='Vladimir (Walter) Marchuk';
-$VERSION='1.2';
+$VERSION='1.2.0.1';
 
 # list of things to share with external scripts - do not modify here, modify in hooks
 our @SAFESHARE = ('$force', '$debug', '$dryrun', '$OS', '$OSVERSION', '$ARCH', '$FULLARCH', '$HOSTNAME', '@DUTIES', '@CLUSTERS', '@LOCATION', '@HARDWARE', '$LINUXDISTRO', '@HOOKS', '%ENV', '$FILE', '$RSYNC_SRC', '$ARG', '@ARGS', '$FILEBASE', '$DIR', '$ORIGINAL_FILE', '*CONFIG', '*STDOUT', '*STDERR', '$rperms', '$perms', '$owner', '$group', '$rowner', '$rgroup', '$uid', '$gid', '&cat', '&compare_link_destination', '&compare_file_contents', '&compare_permissions', '&compare_ownership', '&chmod', '&chown', '&octify', '&symlink', '&readfile', '&warn', '&bug', '&log');
@@ -163,9 +163,12 @@ sub generateall($$$)
                         	our @CONFIGPATHDISABLED if (!@CONFIGPATHDISABLED);                                       
                         	push(@CONFIGPATHDISABLED, $thisfile);                                                            
                 	}                                                                                                        
-                	return if ( ($skip && $thisfile =~ /^$skip(\/|$)/) || (grep { $thisfile =~ /^$_(\/|$)/ } @CONFIGPATHDISABLED) );
+			return if ( grep { $thisfile =~ /^$_(\/|$)/ } @CONFIGPATHDISABLED);
 
-                	unless (&findgenerated($thisfile.$srcpath))    
+			if ($dryrun eq 'process' && $file eq '/') { return if ($skip !~ /^$SOURCEBASE/); }
+			else { return if (($skip && $thisfile =~ /^$skip(\/|$)/)); }
+
+                	unless (&findgenerated("${thisfile}:${srcpath}"))    
                 	{                                                                                                        
 				if ($dryrun eq 'process')
 				{ 
@@ -174,10 +177,10 @@ sub generateall($$$)
 				}
 				else
 				{
-                        		$GENERATED{$thisfile} = $GENERATED{$thisfile . $srcpath} = 1; 
+                        		$GENERATED{$thisfile} = $GENERATED{"${thisfile}:${srcpath}"} = 1; 
                         		eval{   
 						no warnings;                                                                             
-                                		print IPC "GENERATED:${thisfile}\n";                                                     
+                                		print IPC "GENERATED:${thisfile}:${srcpath}\n";                                                     
                                 		%GENERATETEST = %{$IPC->get('GENERATETEST')};                                            
                         		};                                                                                               
                         		my $ret = &generate($thisfile, $dryrun, $srcpath);
@@ -187,7 +190,7 @@ sub generateall($$$)
                                 		eval{   
 							no warnings;                                                                     
                                         		$IPC->set('GENERATETEST', \%GENERATETEST);                                       
-                                        		print IPC "GENERATED:${thisfile}:DONE\n";                                        
+                                        		print IPC "GENERATED:${thisfile}:${srcpath}:DONE\n";                                        
                                         		$IPC->set($thisfile, '1') if ($ret != 2);                                        
                                 		};                                                                                       
                         		}                                                                                                
@@ -217,7 +220,7 @@ sub generateall($$$)
 					return sort { $a cmp $b } @_ if ($depth < $max_depth - 1);
 					return sort { $a cmp $b } grep { not -d } @_;
 				}, 
-				wanted => sub { &look_for_config_xml($f, $skip, 'process'), }
+				wanted => sub { &look_for_config_xml($f, $file, 'process'), }
 			      }, $SOURCEBASE.$varf);
 			};
 		}
@@ -953,6 +956,11 @@ sub generate_task($$$)
 		&log(" Processing $when for $file due to schedule match: $msgSched == $msgNow");
 	}
 
+	my $isrefresh=1;
+	if ($xpath->exists("/config/$when/exec"))    { $isrefresh=&isrefresh("/config/$when/exec", $file, $xpath); }
+	elsif ($xpath->exists("/config/$when/command")) { $isrefresh=&isrefresh("/config/$when/command", $file, $xpath); }
+	return(0) if (!$isrefresh);
+
 	# trigger: execute command if return code returns non zero then do not proceed
 	if ($xpath->exists("/config/$when/trigger"))
 	{
@@ -965,6 +973,7 @@ sub generate_task($$$)
 		
 	}
 	
+	$rsync_run = &isrefresh("/config/$when/rsync", $FILE, $xpath) if ($rsync_run);
 	&process_pre(@_);
 
 	my ($ret, $retcode) = &process_command($when, @_);
@@ -1911,6 +1920,8 @@ sub process_rsync_healthcheck($)
 	my $uri = shift || &bug("No rsync uri provided for verification");
 	my $command = $defaults_xpath->getNodeText("/config/rsync/command");
 	my $options = $defaults_xpath->getNodeText("/config/rsync/options");
+	our %RSYNC_SRC_HC if (!defined %RSYNC_SRC_HC); # keep track of healthecks
+	return($RSYNC_SRC_HC{$uri}) if (exists $RSYNC_SRC_HC{$uri});
 
 	my $cmd = "$command $options --timeout=10 --dry-run $uri";
 	&log("Processing RSYNC healthcheck $uri\n", $debug);	
@@ -1928,8 +1939,10 @@ sub process_rsync_healthcheck($)
 	if ($errorfound || $ret != 0)
 	{
 		&display("COLOR:red:WARNING: Healthecheck failed for $uri!\n");
+		$RSYNC_SRC_HC{$uri}=1;
 		return(1);
 	}
+	$RSYNC_SRC_HC{$uri}=0;
 	return(0);
 }
 
@@ -2030,9 +2043,9 @@ sub process_rsync($$)
 	my $defaultOptions = $defaults_xpath->getNodeText("/config/rsync/options");
 	if ($options) { $options =~ s/::DEFAULT::/$defaultOptions/; } # Allow for appending to default options
 	else { $options = $defaultOptions; }
-	$options .= " --include='${include}'" if ($include);
+	$options .= " --include=${include}" if ($include);
         $options .= " --include-from=${includefrom}" if ($includefrom);
-	$options .= " --exclude='${exclude}'" if ($exclude);
+	$options .= " --exclude=${exclude}" if ($exclude);
 	$options .= " --exclude-from=${excludefrom}" if ($excludefrom);
         $options .= " --dry-run" if ($dryrun);
 	$options .= " -v";
@@ -3347,7 +3360,7 @@ sub display
 	}
 
 	# color output based on content of message
-	$color = 'red' if ($msg =~ /ERROR|failed|not proceeding/i);
+	$color = 'red' if ($msg =~ /ERROR|failed|not proceeding/i && $msg !~ /^rsync.*?\): .[fd]/);
 
 	if ($msg =~ /^COLOR:(.*?):/)
 	{
@@ -3457,7 +3470,6 @@ sub alert
 
 	my $pid = open(CMD, "|$alertcmd");
 	print CMD "\n".$DIV.$msg."\n".$DIV;
-	print CMD "Source: $SOURCEBASE\n";
 	print CMD "---\nGenerated by $SYSTEMOWNER\@$HOSTNAME:$ETCH\nLog file: $LOGFILE";
 	close(CMD)
 }
