@@ -447,7 +447,7 @@ sub generate
 		
 		# Run post runas
 		&logprepop();
-		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n") if ($dryrun != 9);
+		&log("END Etching $FILE ". ($dryrun?'(DRYRUN)':'') ." [". localtime(time) ."]\n") if ($dryrun != 9 && $FILE eq $ISMINE);
 		return($ret) if( $ret = &process_runas($file, $xpath, $test, 'post') );
 	}
 
@@ -1573,6 +1573,7 @@ sub ismine
 			if ($dryrun != 9)
                 	{
                         	&log($msg);
+				our $ISMINE=$FILE;
                         	&logprepush();
                 	}
 			if ($debug > 8) { map { &log("NODE MATCH: " . $_->toString) } @matched; }
