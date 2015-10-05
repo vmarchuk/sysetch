@@ -1920,7 +1920,7 @@ sub process_rsync_healthcheck($)
 	my $uri = shift || &bug("No rsync uri provided for verification");
 	my $command = $defaults_xpath->getNodeText("/config/rsync/command");
 	my $options = $defaults_xpath->getNodeText("/config/rsync/options");
-	our %RSYNC_SRC_HC if (!defined %RSYNC_SRC_HC); # keep track of healthecks
+	our %RSYNC_SRC_HC if (!%RSYNC_SRC_HC); # keep track of healthecks
 	return($RSYNC_SRC_HC{$uri}) if (exists $RSYNC_SRC_HC{$uri});
 
 	my $cmd = "$command $options --timeout=10 --dry-run $uri";
